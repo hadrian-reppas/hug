@@ -1,5 +1,3 @@
-use std::collections::VecDeque;
-
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -13,85 +11,6 @@ pub struct Token<'a, 'b> {
 }
 
 pub struct Tokens<'a, 'b> {
-    iter: TokenIter<'a, 'b>,
-    peek: VecDeque<Token<'a, 'b>>,
-}
-
-impl<'a, 'b> Tokens<'a, 'b> {
-    pub fn new(code: &'a str, file: &'b str) -> Self {
-        Tokens {
-            iter: TokenIter {
-                suffix: code,
-                code,
-                line: 0,
-                column: 0,
-                file,
-            },
-            peek: VecDeque::new(),
-        }
-    }
-
-    pub fn next(&mut self) -> Result<Token<'a, 'b>, Error<'a, 'b>> {
-        if let Some(token) = self.peek.pop_front() {
-            Ok(token)
-        } else {
-            self.iter.next()
-        }
-    }
-
-    pub fn consume<S: Sequence>(&mut self, sequence: S) -> Result<bool, Error<'a, 'b>> {
-        let len = sequence.as_slice().len();
-        if self.peek(sequence)? {
-            for _ in 0..len {
-                self.next()?;
-            }
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
-    pub fn peek<S: Sequence>(&mut self, sequence: S) -> Result<bool, Error<'a, 'b>> {
-        for (i, &kind) in sequence.as_slice().iter().enumerate() {
-            if i == self.peek.len() {
-                self.peek.push_back(self.iter.next()?);
-            }
-            if self.peek[i].kind != kind {
-                return Ok(false);
-            }
-        }
-        Ok(true)
-    }
-
-    pub fn peek_kind(&mut self) -> Result<TokenKind, Error<'a, 'b>> {
-        if self.peek.is_empty() {
-            self.peek.push_back(self.iter.next()?);
-        }
-        Ok(self.peek[0].kind)
-    }
-
-    pub fn peek_span(&mut self) -> Result<Span<'a, 'b>, Error<'a, 'b>> {
-        if self.peek.is_empty() {
-            self.peek.push_back(self.iter.next()?);
-        }
-        Ok(self.peek[0].span)
-    }
-
-    pub fn expect(&mut self, expected: TokenKind) -> Result<Token<'a, 'b>, Error<'a, 'b>> {
-        let token = self.next()?;
-        if token.kind == expected {
-            Ok(token)
-        } else {
-            Err(Error::Parse(
-                format!("expected {}", expected.description()),
-                token.span,
-                vec![],
-            ))
-        }
-    }
-}
-
-struct TokenIter<'a, 'b> {
     suffix: &'a str,
     code: &'a str,
     line: usize,
@@ -99,8 +18,18 @@ struct TokenIter<'a, 'b> {
     file: &'b str,
 }
 
-impl<'a, 'b> TokenIter<'a, 'b> {
-    fn next(&mut self) -> Result<Token<'a, 'b>, Error<'a, 'b>> {
+impl<'a, 'b> Tokens<'a, 'b> {
+    pub fn new(code: &'a str, file: &'b str) -> Self {
+        Tokens {
+            suffix: code,
+            code,
+            line: 0,
+            column: 0,
+            file,
+        }
+    }
+
+    pub fn next(&mut self) -> Result<Token<'a, 'b>, Error<'a, 'b>> {
         self.skip_whitespace();
         if self.suffix.is_empty() {
             Ok(Token {
@@ -687,39 +616,5 @@ impl TokenKind {
             TokenKind::While => "`while`",
             TokenKind::Eof => "end of file",
         }
-    }
-}
-
-pub trait Sequence {
-    fn as_slice(&self) -> &[TokenKind];
-}
-
-impl Sequence for TokenKind {
-    fn as_slice(&self) -> &[TokenKind] {
-        macro_rules! block {
-            ($($names:ident),* $(,)?) => {
-                match self {
-                    $(TokenKind::$names => {
-                        const TOKEN: &[TokenKind] = &[TokenKind::$names];
-                        TOKEN
-                    })*
-                }
-            };
-        }
-
-        block! {
-            Ident, Int, Float, Char, String, ByteString, Byte, Semicolon, Comma, Dot, LParen,
-            RParen, LBrace, RBrace, LBrack, RBrack, At, Tilde, QMark, Colon, Eq, Bang, Lt, Gt,
-            Minus, Plus, Star, Slash, Caret, Percent, And, As, Break, Const, Continue, Else, Enum,
-            Extern, Flase, Fn, For, Global, Goto, If, Impl, In, Let, Loop, Match, Mod, Mut, Not,
-            Or, Pub, Return, SelfType, SelfValue, Struct, Trait, Try, True, Type, Use, Where,
-            While, Eof,
-        }
-    }
-}
-
-impl<const N: usize> Sequence for [TokenKind; N] {
-    fn as_slice(&self) -> &[TokenKind] {
-        self
     }
 }

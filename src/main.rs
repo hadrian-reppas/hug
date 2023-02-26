@@ -23,8 +23,7 @@ pub struct Vec<T> {
 const FILE_NAME: &str = "main.hug";
 
 fn main() {
-    let mut tokens = lex::Tokens::new(CODE, FILE_NAME);
-    match parse::unit(&mut tokens) {
+    match parse::parse(CODE, FILE_NAME) {
         Ok(unit) => {
             for item in unit {
                 println!("{item:#?}");
