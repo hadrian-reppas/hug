@@ -137,7 +137,7 @@ impl<'a, 'b> Tokens<'a, 'b> {
 
             Ok(Token { kind, span })
         } else if self.suffix.starts_with(';') {
-            token!(Semicolon)
+            token!(Semi)
         } else if self.suffix.starts_with(',') {
             token!(Comma)
         } else if self.suffix.starts_with('.') {
@@ -174,7 +174,7 @@ impl<'a, 'b> Tokens<'a, 'b> {
             if self.suffix[1..].starts_with(|c: char| c.is_ascii_digit()) {
                 self.lex_number()
             } else {
-                token!(Minus)
+                token!(Dash)
             }
         } else if self.suffix.starts_with('+') {
             token!(Plus)
@@ -482,7 +482,7 @@ pub enum TokenKind {
     ByteString,
 
     // symbols
-    Semicolon,
+    Semi,
     Comma,
     Dot,
     LParen,
@@ -499,7 +499,7 @@ pub enum TokenKind {
     Bang,
     Lt,
     Gt,
-    Minus,
+    Dash,
     Plus,
     Star,
     Slash,
@@ -556,7 +556,7 @@ impl TokenKind {
             TokenKind::String => "string",
             TokenKind::ByteString => "byte string",
             TokenKind::Byte => "byte",
-            TokenKind::Semicolon => "`;`",
+            TokenKind::Semi => "`;`",
             TokenKind::Comma => "`,`",
             TokenKind::Dot => "`.`",
             TokenKind::LParen => "`(`",
@@ -573,7 +573,7 @@ impl TokenKind {
             TokenKind::Bang => "`!`",
             TokenKind::Lt => "`<`",
             TokenKind::Gt => "`>`",
-            TokenKind::Minus => "`-`",
+            TokenKind::Dash => "`-`",
             TokenKind::Plus => "`+`",
             TokenKind::Star => "`*`",
             TokenKind::Slash => "`/`",

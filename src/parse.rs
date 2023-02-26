@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use crate::ast::*;
 use crate::error::Error;
-use crate::lex::{TokenKind, TokenKind::*, Tokens, Token};
+use crate::lex::{Token, TokenKind, TokenKind::*, Tokens};
 use crate::span::Span;
 
 pub fn parse<'a, 'b>(code: &'a str, file: &'b str) -> Result<Vec<Item<'a, 'b>>, Error<'a, 'b>> {
@@ -117,6 +117,171 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
+    fn ty(&mut self) -> Result<Ty<'a, 'b>, Error<'a, 'b>> {
+        match self.peek_kind()? {
+            Ident => {
+                let path = self.path()?;
+                let (generic_args, span) = if self.peek(Lt)? {
+                    let generic_args = self.generic_args()?;
+                    let span = path.span.to(generic_args.span);
+                    (Some(generic_args), span)
+                } else {
+                    (None, path.span)
+                };
+
+                Ok(Ty::Path {
+                    path,
+                    generic_args,
+                    span,
+                })
+            }
+            Star => {
+                let star_span = self.expect(Star)?.span;
+                let ty = self.ty()?;
+
+                let span = star_span.to(ty.span());
+                Ok(Ty::Ptr {
+                    ty: Box::new(ty),
+                    span,
+                })
+            }
+            LParen => {
+                let first = self.expect(LParen)?;
+
+                if self.peek(RParen)? {
+                    let last = self.expect(RParen)?;
+                    let span = first.span.to(last.span);
+                    return Ok(Ty::Tuple {
+                        tys: Vec::new(),
+                        span,
+                    });
+                }
+
+                let ty = self.ty()?;
+                if self.peek(RParen)? {
+                    self.expect(RParen)?;
+                    return Ok(ty);
+                }
+
+                let mut tys = vec![ty];
+                while !self.peek(RParen)? && !self.peek([Comma, RParen])? {
+                    self.expect(Comma)?;
+                    tys.push(self.ty()?);
+                }
+                self.consume(Comma)?;
+                let last = self.expect(RParen)?;
+
+                let span = first.span.to(last.span);
+                Ok(Ty::Tuple { tys, span })
+            }
+            LBrack => {
+                let first = self.expect(LBrack)?;
+                let ty = self.ty()?;
+                if self.peek(RBrack)? {
+                    let last = self.expect(RBrack)?;
+                    let span = first.span.to(last.span);
+                    Ok(Ty::Slice {
+                        ty: Box::new(ty),
+                        span,
+                    })
+                } else if self.peek(Semi)? {
+                    self.expect(Semi)?;
+                    let count = self.expect(Int)?.span;
+                    let last = self.expect(RBrack)?;
+
+                    let span = first.span.to(last.span);
+                    Ok(Ty::Array {
+                        ty: Box::new(ty),
+                        count,
+                        span,
+                    })
+                } else {
+                    Err(Error::Parse(
+                        format!(
+                            "expected {} or {}, found {}",
+                            RBrack.description(),
+                            Semi.description(),
+                            self.peek_kind()?.description()
+                        ),
+                        self.peek_span()?,
+                        vec![],
+                    ))
+                }
+            }
+            Fn => {
+                let first = self.expect(Fn)?;
+                self.expect(LParen)?;
+                let (params, last) = if self.peek(RParen)? {
+                    (Vec::new(), self.expect(RParen)?)
+                } else {
+                    let mut params = vec![self.ty()?];
+                    while !self.peek(RParen)? && !self.peek([Comma, RParen])? {
+                        self.expect(Comma)?;
+                        params.push(self.ty()?);
+                    }
+                    self.consume(Comma)?;
+                    let last = self.expect(RParen)?;
+                    (params, last)
+                };
+
+                if self.peek(Dash)? {
+                    self.expect(Dash)?;
+                    self.expect(Gt)?;
+                    let ret = self.ty()?;
+
+                    let span = first.span.to(ret.span());
+                    Ok(Ty::Fn {
+                        params,
+                        ret: Some(Box::new(ret)),
+                        span,
+                    })
+                } else {
+                    let span = first.span.to(last.span);
+                    Ok(Ty::Fn {
+                        params,
+                        ret: None,
+                        span,
+                    })
+                }
+            }
+            SelfType => Ok(Ty::SelfType {
+                span: self.expect(SelfType)?.span,
+            }),
+            Bang => Ok(Ty::Never {
+                span: self.expect(Bang)?.span,
+            }),
+            kind => Err(Error::Parse(
+                format!("expected type, found {}", kind.description()),
+                self.peek_span()?,
+                vec![],
+            )),
+        }
+    }
+
+    fn generic_args(&mut self) -> Result<GenericArgs<'a, 'b>, Error<'a, 'b>> {
+        let first = self.expect(Lt)?;
+
+        if self.peek(Gt)? {
+            let last = self.expect(Gt)?;
+            let span = first.span.to(last.span);
+            return Ok(GenericArgs {
+                args: Vec::new(),
+                span,
+            });
+        }
+
+        let mut args = vec![self.ty()?];
+        while !self.peek(Gt)? && !self.peek([Comma, Gt])? {
+            self.expect(Comma)?;
+            args.push(self.ty()?);
+        }
+        self.consume(Comma)?;
+        let last = self.expect(Gt)?;
+
+        let span = first.span.to(last.span);
+        Ok(GenericArgs { args, span })
+    }
+
     fn use_decl(&mut self, pub_span: Option<Span<'a, 'b>>) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
         if let Some(span) = pub_span {
             return Err(Error::Parse(
@@ -132,7 +297,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
         let first = self.expect(Use)?;
         let tree = self.use_tree()?;
-        let last = self.expect(Semicolon)?;
+        let last = self.expect(Semi)?;
         Ok(Item::Use {
             tree,
             span: first.span.to(last.span),
@@ -258,7 +423,32 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     fn struct_field(&mut self) -> Result<StructField<'a, 'b>, Error<'a, 'b>> {
-        todo!()
+        if self.peek(Pub)? {
+            let pub_span = self.expect(Pub)?.span;
+            let name = self.name()?;
+            self.expect(Colon)?;
+            let ty = self.ty()?;
+
+            let span = pub_span.to(ty.span());
+            Ok(StructField {
+                is_pub: true,
+                name,
+                ty,
+                span,
+            })
+        } else {
+            let name = self.name()?;
+            self.expect(Colon)?;
+            let ty = self.ty()?;
+
+            let span = name.span.to(ty.span());
+            Ok(StructField {
+                is_pub: false,
+                name,
+                ty,
+                span,
+            })
+        }
     }
 
     fn name(&mut self) -> Result<Name<'a, 'b>, Error<'a, 'b>> {
@@ -299,9 +489,9 @@ impl Sequence for TokenKind {
         }
 
         block! {
-            Ident, Int, Float, Char, String, ByteString, Byte, Semicolon, Comma, Dot, LParen,
+            Ident, Int, Float, Char, String, ByteString, Byte, Semi, Comma, Dot, LParen,
             RParen, LBrace, RBrace, LBrack, RBrack, At, Tilde, QMark, Colon, Eq, Bang, Lt, Gt,
-            Minus, Plus, Star, Slash, Caret, Percent, And, As, Break, Const, Continue, Else, Enum,
+            Dash, Plus, Star, Slash, Caret, Percent, And, As, Break, Const, Continue, Else, Enum,
             Extern, Flase, Fn, For, Global, Goto, If, Impl, In, Let, Loop, Match, Mod, Mut, Not,
             Or, Pub, Return, SelfType, SelfValue, Struct, Trait, Try, True, Type, Use, Where,
             While, Eof,

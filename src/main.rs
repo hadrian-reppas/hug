@@ -13,7 +13,8 @@ use std::fs::{
 };
 
 pub struct Vec<T> {
-
+    ptr: *Vec<T>,
+    tup: (String, path::to::Type, !, ()),
 }
 
 // pub use ds::Vector;
