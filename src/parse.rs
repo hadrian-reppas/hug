@@ -37,7 +37,11 @@ impl<'a, 'b> Parser<'a, 'b> {
             Ok(token)
         } else {
             Err(Error::Parse(
-                format!("expected {}", expected.description()),
+                format!(
+                    "expected {}, found {}",
+                    expected.description(),
+                    token.kind.description()
+                ),
                 token.span,
                 vec![],
             ))
@@ -99,16 +103,16 @@ impl<'a, 'b> Parser<'a, 'b> {
 
         match self.peek_kind()? {
             Fn => todo!(),
-            Struct => self.struct_decl(pub_span),
-            Enum => todo!(),
+            Struct => self.struct_def(pub_span),
+            Enum => self.enum_def(pub_span),
+            Impl => todo!(),
             Trait => todo!(),
-            Type => todo!(),
+            Type => self.type_alias(pub_span),
             Const => todo!(),
             Global => todo!(),
             Use => self.use_decl(pub_span),
-            Mod => todo!(),
-            Extern => todo!(),
-            Pub => todo!(),
+            Mod => self.module(pub_span),
+            Extern => self.extern_block(pub_span),
             kind => Err(Error::Parse(
                 format!("expected item, found {}", kind.description()),
                 self.peek_span()?,
@@ -348,7 +352,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn struct_decl(
+    fn struct_def(
         &mut self,
         pub_span: Option<Span<'a, 'b>>,
     ) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
@@ -446,6 +450,470 @@ impl<'a, 'b> Parser<'a, 'b> {
                 is_pub: false,
                 name,
                 ty,
+                span,
+            })
+        }
+    }
+
+    fn enum_def(&mut self, pub_span: Option<Span<'a, 'b>>) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+        let (first_span, is_pub) = if let Some(span) = pub_span {
+            self.expect(Enum)?;
+            (span, true)
+        } else {
+            (self.expect(Enum)?.span, false)
+        };
+
+        let name = self.name()?;
+        let generic_params = if self.peek(Lt)? {
+            Some(self.generic_params()?)
+        } else {
+            None
+        };
+
+        self.expect(LBrace)?;
+
+        if self.peek(RBrace)? {
+            let last = self.expect(RBrace)?;
+            let span = first_span.to(last.span);
+            return Ok(Item::Enum {
+                is_pub,
+                name,
+                generic_params,
+                items: Vec::new(),
+                span,
+            });
+        }
+
+        let mut items = vec![self.enum_item()?];
+        while !self.peek(RBrace)? && !self.peek([Comma, RBrace])? {
+            self.expect(Comma)?;
+            items.push(self.enum_item()?);
+        }
+        self.consume(Comma)?;
+        let last = self.expect(RBrace)?;
+
+        let span = first_span.to(last.span);
+        Ok(Item::Enum {
+            is_pub,
+            name,
+            generic_params,
+            items,
+            span,
+        })
+    }
+
+    fn enum_item(&mut self) -> Result<EnumItem<'a, 'b>, Error<'a, 'b>> {
+        let name = self.name()?;
+
+        if !self.consume(LParen)? {
+            return Ok(EnumItem {
+                name,
+                tuple: None,
+                span: name.span,
+            });
+        }
+
+        if self.peek(RParen)? {
+            let last = self.expect(RParen)?;
+            let span = name.span.to(last.span);
+            return Ok(EnumItem {
+                name,
+                tuple: Some(Vec::new()),
+                span,
+            });
+        }
+
+        let mut tuple = vec![self.ty()?];
+        while !self.peek(RParen)? && !self.peek([Comma, RParen])? {
+            self.expect(Comma)?;
+            tuple.push(self.ty()?);
+        }
+        self.consume(Comma)?;
+        let last = self.expect(RParen)?;
+
+        let span = name.span.to(last.span);
+        Ok(EnumItem {
+            name,
+            tuple: Some(tuple),
+            span,
+        })
+    }
+
+    fn type_alias(
+        &mut self,
+        pub_span: Option<Span<'a, 'b>>,
+    ) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+        let (first_span, is_pub) = if let Some(span) = pub_span {
+            self.expect(Type)?;
+            (span, true)
+        } else {
+            (self.expect(Type)?.span, false)
+        };
+
+        let name = self.name()?;
+        let generic_params = if self.peek(Lt)? {
+            Some(self.generic_params()?)
+        } else {
+            None
+        };
+
+        self.expect(Eq)?;
+        let ty = self.ty()?;
+        let last = self.expect(Semi)?;
+
+        let span = first_span.to(last.span);
+        Ok(Item::Type {
+            is_pub,
+            name,
+            generic_params,
+            ty,
+            span,
+        })
+    }
+
+    fn module(&mut self, pub_span: Option<Span<'a, 'b>>) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+        let (first_span, is_pub) = if let Some(span) = pub_span {
+            self.expect(Mod)?;
+            (span, true)
+        } else {
+            (self.expect(Mod)?.span, false)
+        };
+
+        let name = self.name()?;
+        if self.peek(Semi)? {
+            let last = self.expect(Semi)?;
+            let span = first_span.to(last.span);
+            Ok(Item::Mod {
+                is_pub,
+                name,
+                at: None,
+                span,
+            })
+        } else if self.peek(At)? {
+            self.expect(At)?;
+            let path = self.expect(String)?;
+            let last = self.expect(Semi)?;
+
+            let span = first_span.to(last.span);
+            Ok(Item::Mod {
+                is_pub,
+                name,
+                at: Some(path.span),
+                span,
+            })
+        } else {
+            Err(Error::Parse(
+                format!(
+                    "expected {} or {}, found {}",
+                    At.description(),
+                    Semi.description(),
+                    self.peek_kind()?.description()
+                ),
+                self.peek_span()?,
+                vec![],
+            ))
+        }
+    }
+
+    fn extern_block(
+        &mut self,
+        pub_span: Option<Span<'a, 'b>>,
+    ) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+        if let Some(span) = pub_span {
+            return Err(Error::Parse(
+                format!(
+                    "{} not permitted before {}",
+                    Pub.description(),
+                    Extern.description()
+                ),
+                span,
+                vec![],
+            ));
+        }
+
+        let first = self.expect(Extern)?;
+        self.expect(LBrace)?;
+        let mut items = Vec::new();
+        while !self.peek(RBrace)? {
+            items.push(self.extern_item()?);
+        }
+        let last = self.expect(RBrace)?;
+
+        let span = first.span.to(last.span);
+        Ok(Item::Extern { items, span })
+    }
+
+    fn extern_item(&mut self) -> Result<ExternItem<'a, 'b>, Error<'a, 'b>> {
+        let pub_span = if self.peek(Pub)? {
+            Some(self.next()?.span)
+        } else {
+            None
+        };
+
+        match self.peek_kind()? {
+            Fn => {
+                let signature = self.signature(pub_span)?;
+                let last = self.expect(Semi)?;
+                let span = signature.span.to(last.span);
+                Ok(ExternItem::Fn { signature, span })
+            }
+            Type => {
+                let (first_span, is_pub) = if let Some(span) = pub_span {
+                    self.expect(Type)?;
+                    (span, true)
+                } else {
+                    (self.expect(Type)?.span, false)
+                };
+
+                let name = self.name()?;
+                let last = self.expect(Semi)?;
+
+                let span = first_span.to(last.span);
+                Ok(ExternItem::Type { is_pub, name, span })
+            }
+            Global => {
+                let (first_span, is_pub) = if let Some(span) = pub_span {
+                    self.expect(Global)?;
+                    (span, true)
+                } else {
+                    (self.expect(Global)?.span, false)
+                };
+
+                let name = self.name()?;
+                self.expect(Colon)?;
+                let ty = self.ty()?;
+                let last = self.expect(Semi)?;
+
+                let span = first_span.to(last.span);
+                Ok(ExternItem::Global {
+                    is_pub,
+                    name,
+                    ty,
+                    span,
+                })
+            }
+            kind => Err(Error::Parse(
+                format!(
+                    "expected {}, {} or {}, found {}",
+                    Fn.description(),
+                    Type.description(),
+                    Global.description(),
+                    kind.description()
+                ),
+                self.peek_span()?,
+                vec![],
+            )),
+        }
+    }
+
+    fn signature(
+        &mut self,
+        pub_span: Option<Span<'a, 'b>>,
+    ) -> Result<Signature<'a, 'b>, Error<'a, 'b>> {
+        let (first_span, is_pub) = if let Some(span) = pub_span {
+            self.expect(Fn)?;
+            (span, true)
+        } else {
+            (self.expect(Fn)?.span, false)
+        };
+
+        let name = self.name()?;
+        let generic_params = if self.peek(Lt)? {
+            Some(self.generic_params()?)
+        } else {
+            None
+        };
+
+        self.expect(LParen)?;
+        let self_kind = if self.peek(Star)? {
+            let first = self.expect(Star)?;
+            let last = self.expect(SelfValue)?;
+            SelfKind::Ptr(first.span.to(last.span))
+        } else if self.peek(SelfValue)? {
+            SelfKind::Value(self.expect(SelfValue)?.span)
+        } else {
+            SelfKind::None
+        };
+
+        let params = self.params(!self_kind.is_none())?;
+        let last_span = self.expect(RParen)?.span;
+
+        let (ret, last_span) = if self.peek(Dash)? {
+            self.expect(Dash)?;
+            self.expect(Gt)?;
+            let ty = self.ty()?;
+            let span = ty.span();
+            (Some(ty), span)
+        } else {
+            (None, last_span)
+        };
+
+        let (where_clause, last_span) = if self.peek(Where)? {
+            let where_clause = self.where_clause()?;
+            let span = where_clause.span;
+            (Some(where_clause), span)
+        } else {
+            (None, last_span)
+        };
+
+        let span = first_span.to(last_span);
+        Ok(Signature {
+            is_pub,
+            name,
+            generic_params,
+            self_kind,
+            params,
+            ret,
+            where_clause,
+            span,
+        })
+    }
+
+    fn params(&mut self, has_self_param: bool) -> Result<Vec<Param<'a, 'b>>, Error<'a, 'b>> {
+        if has_self_param && !self.peek(RParen)? {
+            self.expect(Comma)?;
+        }
+        if self.peek(Comma)? {
+            return Err(Error::Parse(
+                format!("expected parameter, found {}", Comma.description()),
+                self.peek_span()?,
+                vec![],
+            ));
+        }
+
+        if self.peek(RParen)? {
+            return Ok(Vec::new());
+        }
+
+        let name = self.name()?;
+        self.expect(Colon)?;
+        let ty = self.ty()?;
+        let span = name.span.to(ty.span());
+
+        let mut params = vec![Param { name, ty, span }];
+        while !self.peek(RParen)? && !self.peek([Comma, RParen])? {
+            self.expect(Comma)?;
+            let name = self.name()?;
+            self.expect(Colon)?;
+            let ty = self.ty()?;
+            let span = name.span.to(ty.span());
+            params.push(Param { name, ty, span });
+        }
+        self.consume(Comma)?;
+
+        Ok(params)
+    }
+
+    fn where_clause(&mut self) -> Result<WhereClause<'a, 'b>, Error<'a, 'b>> {
+        let first = self.expect(Where)?;
+
+        let mut items = vec![self.where_item()?];
+        while self.peek([Comma, Ident])? || self.peek([Comma, SelfType])? {
+            self.expect(Comma)?;
+            items.push(self.where_item()?);
+        }
+
+        let last_span = if self.peek(Comma)? {
+            self.expect(Comma)?.span
+        } else {
+            items.last().unwrap().span()
+        };
+
+        let span = first.span.to(last_span);
+        Ok(WhereClause { items, span })
+    }
+
+    fn where_item(&mut self) -> Result<WhereItem<'a, 'b>, Error<'a, 'b>> {
+        if self.peek(Ident)? {
+            let param = self.name()?;
+            self.expect(Colon)?;
+
+            let mut bounds = vec![self.trait_bound()?];
+            while self.peek(Plus)? {
+                self.expect(Plus)?;
+                bounds.push(self.trait_bound()?);
+            }
+
+            let span = param.span.to(bounds.last().unwrap().span());
+            Ok(WhereItem::ParamBound {
+                param,
+                bounds,
+                span,
+            })
+        } else if self.peek(SelfType)? {
+            let self_type = self.expect(SelfType)?;
+            self.expect(Colon)?;
+
+            let mut bounds = vec![self.trait_bound()?];
+            while self.peek(Plus)? {
+                self.expect(Plus)?;
+                bounds.push(self.trait_bound()?);
+            }
+
+            let span = self_type.span.to(bounds.last().unwrap().span());
+            Ok(WhereItem::SelfBound { bounds, span })
+        } else {
+            Err(Error::Parse(
+                format!(
+                    "expected generic parameter or {}, found {}",
+                    SelfType.description(),
+                    self.peek_kind()?.description()
+                ),
+                self.peek_span()?,
+                vec![],
+            ))
+        }
+    }
+
+    fn trait_bound(&mut self) -> Result<TraitBound<'a, 'b>, Error<'a, 'b>> {
+        let path = self.path()?;
+        if self.peek(Lt)? {
+            let generic_args = self.generic_args()?;
+            let span = path.span.to(generic_args.span);
+            Ok(TraitBound::Trait {
+                path,
+                generic_args: Some(generic_args),
+                span,
+            })
+        } else if self.peek(LParen)? {
+            self.expect(LParen)?;
+
+            let params = if self.peek(RParen)? {
+                Vec::new()
+            } else {
+                let mut params = vec![self.ty()?];
+                while !self.peek(RParen)? && !self.peek([Comma, RParen])? {
+                    self.expect(Comma)?;
+                    params.push(self.ty()?);
+                }
+                self.consume(Comma)?;
+                params
+            };
+            let last = self.expect(RParen)?;
+
+            let (ret, last_span) = if self.peek(Dash)? {
+                self.expect(Dash)?;
+                self.expect(Gt)?;
+                let ret = self.ty()?;
+
+                let span = ret.span();
+                (Some(ret), span)
+            } else {
+                (None, last.span)
+            };
+
+            let span = path.span.to(last_span);
+            Ok(TraitBound::Fn {
+                path,
+                params,
+                ret,
+                span,
+            })
+        } else {
+            let span = path.span;
+            Ok(TraitBound::Trait {
+                path,
+                generic_args: None,
                 span,
             })
         }
