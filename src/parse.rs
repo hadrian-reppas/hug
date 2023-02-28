@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use crate::ast::*;
-use crate::error::Error;
+use crate::error::{Error, Note};
 use crate::lex::{Token, TokenKind, TokenKind::*, Tokens};
 use crate::span::Span;
 
@@ -37,11 +37,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             Ok(token)
         } else {
             Err(Error::Parse(
-                format!(
-                    "expected {}, found {}",
-                    expected.description(),
-                    token.kind.description()
-                ),
+                format!("expected {}, found {}", expected.desc(), token.kind.desc()),
                 token.span,
                 vec![],
             ))
@@ -102,19 +98,19 @@ impl<'a, 'b> Parser<'a, 'b> {
         };
 
         match self.peek_kind()? {
-            Fn => todo!(),
+            Fn => self.fn_def(pub_span),
             Struct => self.struct_def(pub_span),
             Enum => self.enum_def(pub_span),
-            Impl => todo!(),
-            Trait => todo!(),
+            Impl => self.impl_block(pub_span),
+            Trait => self.trait_def(pub_span),
             Type => self.type_alias(pub_span),
-            Const => todo!(),
-            Global => todo!(),
+            Const => self.const_def(pub_span),
+            Static => self.static_decl(pub_span),
             Use => self.use_decl(pub_span),
             Mod => self.module(pub_span),
             Extern => self.extern_block(pub_span),
             kind => Err(Error::Parse(
-                format!("expected item, found {}", kind.description()),
+                format!("expected item, found {}", kind.desc()),
                 self.peek_span()?,
                 vec![],
             )),
@@ -203,9 +199,9 @@ impl<'a, 'b> Parser<'a, 'b> {
                     Err(Error::Parse(
                         format!(
                             "expected {} or {}, found {}",
-                            RBrack.description(),
-                            Semi.description(),
-                            self.peek_kind()?.description()
+                            RBrack.desc(),
+                            Semi.desc(),
+                            self.peek_kind()?.desc()
                         ),
                         self.peek_span()?,
                         vec![],
@@ -255,7 +251,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                 span: self.expect(Bang)?.span,
             }),
             kind => Err(Error::Parse(
-                format!("expected type, found {}", kind.description()),
+                format!("expected type, found {}", kind.desc()),
                 self.peek_span()?,
                 vec![],
             )),
@@ -287,17 +283,7 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     fn use_decl(&mut self, pub_span: Option<Span<'a, 'b>>) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
-        if let Some(span) = pub_span {
-            return Err(Error::Parse(
-                format!(
-                    "{} not permitted before {}",
-                    Pub.description(),
-                    Use.description()
-                ),
-                span,
-                vec![],
-            ));
-        }
+        self.disallow_pub(pub_span, Use)?;
 
         let first = self.expect(Use)?;
         let tree = self.use_tree()?;
@@ -356,12 +342,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         &mut self,
         pub_span: Option<Span<'a, 'b>>,
     ) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
-        let (first_span, is_pub) = if let Some(span) = pub_span {
-            self.expect(Struct)?;
-            (span, true)
-        } else {
-            (self.expect(Struct)?.span, false)
-        };
+        let (first_span, is_pub) = self.handle_pub(pub_span, Struct)?;
 
         let name = self.name()?;
         let generic_params = if self.peek(Lt)? {
@@ -456,12 +437,7 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     fn enum_def(&mut self, pub_span: Option<Span<'a, 'b>>) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
-        let (first_span, is_pub) = if let Some(span) = pub_span {
-            self.expect(Enum)?;
-            (span, true)
-        } else {
-            (self.expect(Enum)?.span, false)
-        };
+        let (first_span, is_pub) = self.handle_pub(pub_span, Enum)?;
 
         let name = self.name()?;
         let generic_params = if self.peek(Lt)? {
@@ -543,12 +519,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         &mut self,
         pub_span: Option<Span<'a, 'b>>,
     ) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
-        let (first_span, is_pub) = if let Some(span) = pub_span {
-            self.expect(Type)?;
-            (span, true)
-        } else {
-            (self.expect(Type)?.span, false)
-        };
+        let (first_span, is_pub) = self.handle_pub(pub_span, Type)?;
 
         let name = self.name()?;
         let generic_params = if self.peek(Lt)? {
@@ -572,42 +543,92 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     fn module(&mut self, pub_span: Option<Span<'a, 'b>>) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
-        let (first_span, is_pub) = if let Some(span) = pub_span {
-            self.expect(Mod)?;
-            (span, true)
-        } else {
-            (self.expect(Mod)?.span, false)
-        };
+        let (first_span, is_pub) = self.handle_pub(pub_span, Mod)?;
+        let name = self.name()?;
+        let last = self.expect(Semi)?;
+
+        let span = first_span.to(last.span);
+        Ok(Item::Mod { is_pub, name, span })
+    }
+
+    fn trait_def(&mut self, pub_span: Option<Span<'a, 'b>>) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+        let (first_span, is_pub) = self.handle_pub(pub_span, Trait)?;
 
         let name = self.name()?;
+        let generic_params = if self.peek(Lt)? {
+            Some(self.generic_params()?)
+        } else {
+            None
+        };
+
+        let self_bounds = if self.peek(Colon)? {
+            self.expect(Colon)?;
+            let mut bounds = vec![self.trait_bound()?];
+            while self.peek(Plus)? {
+                self.consume(Plus)?;
+                bounds.push(self.trait_bound()?);
+            }
+            bounds
+        } else {
+            Vec::new()
+        };
+
+        let where_clause = if self.peek(Where)? {
+            Some(self.where_clause()?)
+        } else {
+            None
+        };
+
+        self.expect(LBrace)?;
+        let mut items = Vec::new();
+        while !self.peek(RBrace)? {
+            items.push(self.trait_item()?);
+        }
+        let last = self.expect(RBrace)?;
+
+        let span = first_span.to(last.span);
+        Ok(Item::Trait {
+            is_pub,
+            name,
+            generic_params,
+            self_bounds,
+            where_clause,
+            items,
+            span,
+        })
+    }
+
+    fn trait_item(&mut self) -> Result<TraitItem<'a, 'b>, Error<'a, 'b>> {
+        if self.peek(Pub)? {
+            return Err(Error::Parse(
+                format!("{} not permitted here", Pub.desc()),
+                self.peek_span()?,
+                vec![Note::new(
+                    format!("{} is implied for trait functions", Pub.desc()),
+                    None,
+                )],
+            ));
+        }
+
+        let signature = self.signature()?;
         if self.peek(Semi)? {
             let last = self.expect(Semi)?;
-            let span = first_span.to(last.span);
-            Ok(Item::Mod {
-                is_pub,
-                name,
-                at: None,
-                span,
-            })
-        } else if self.peek(At)? {
-            self.expect(At)?;
-            let path = self.expect(String)?;
-            let last = self.expect(Semi)?;
-
-            let span = first_span.to(last.span);
-            Ok(Item::Mod {
-                is_pub,
-                name,
-                at: Some(path.span),
+            let span = signature.span.to(last.span);
+            Ok(TraitItem::Required { signature, span })
+        } else if self.peek(LBrace)? {
+            let block = self.block()?;
+            let span = signature.span.to(block.span);
+            Ok(TraitItem::Provided {
+                signature,
+                block,
                 span,
             })
         } else {
             Err(Error::Parse(
                 format!(
-                    "expected {} or {}, found {}",
-                    At.description(),
-                    Semi.description(),
-                    self.peek_kind()?.description()
+                    "expected block or {} after signature, found {}",
+                    Semi.desc(),
+                    self.peek_kind()?.desc()
                 ),
                 self.peek_span()?,
                 vec![],
@@ -615,21 +636,95 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
+    fn block(&mut self) -> Result<Block<'a, 'b>, Error<'a, 'b>> {
+        let first = self.expect(LBrace)?;
+        let mut stmts = Vec::new();
+        while !self.peek(RBrace)? {
+            match self.peek_kind()? {
+                Let => stmts.push(self.local()?),
+                Pub | Fn | Struct | Enum | Type | Use | Trait | Impl | Const | Static | Extern
+                | Mod => {
+                    let item = self.item()?;
+                    let span = item.span();
+                    stmts.push(Stmt::Item { item, span });
+                }
+                Semi => {
+                    self.expect(Semi)?;
+                }
+                _ => {
+                    let expr = self.expr()?;
+                    if self.peek(Semi)? {
+                        let last = self.expect(Semi)?;
+                        let span = expr.span().to(last.span);
+                        stmts.push(Stmt::Expr { expr, span });
+                    } else if self.peek(RBrace)? {
+                        let last = self.expect(RBrace)?;
+                        let span = first.span.to(last.span);
+                        return Ok(Block {
+                            stmts,
+                            expr: Some(expr),
+                            span,
+                        });
+                    } else {
+                        return Err(Error::Parse(
+                            format!(
+                                "expected {} or {} after expression, found {}",
+                                Semi.desc(),
+                                RBrace.desc(),
+                                self.peek_kind()?.desc()
+                            ),
+                            self.peek_span()?,
+                            vec![],
+                        ));
+                    }
+                }
+            }
+        }
+        let last = self.expect(RBrace)?;
+
+        let span = first.span.to(last.span);
+        Ok(Block {
+            stmts,
+            expr: None,
+            span,
+        })
+    }
+
+    fn local(&mut self) -> Result<Stmt<'a, 'b>, Error<'a, 'b>> {
+        let first = self.expect(Let)?;
+        let pattern = self.pattern()?;
+
+        let ty = if self.consume(Colon)? {
+            Some(self.ty()?)
+        } else {
+            None
+        };
+
+        let expr = if self.consume(Eq)? {
+            Some(self.expr()?)
+        } else {
+            None
+        };
+
+        let last = self.expect(Semi)?;
+        let span = first.span.to(last.span);
+        Ok(Stmt::Local {
+            pattern,
+            ty,
+            expr,
+            span,
+        })
+    }
+
+    fn expr(&mut self) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
+        todo!()
+    }
+
     fn extern_block(
         &mut self,
         pub_span: Option<Span<'a, 'b>>,
     ) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
-        if let Some(span) = pub_span {
-            return Err(Error::Parse(
-                format!(
-                    "{} not permitted before {}",
-                    Pub.description(),
-                    Extern.description()
-                ),
-                span,
-                vec![],
-            ));
-        }
+        self.disallow_pub(pub_span, Extern)?;
 
         let first = self.expect(Extern)?;
         self.expect(LBrace)?;
@@ -652,10 +747,18 @@ impl<'a, 'b> Parser<'a, 'b> {
 
         match self.peek_kind()? {
             Fn => {
-                let signature = self.signature(pub_span)?;
+                let signature = self.signature()?;
                 let last = self.expect(Semi)?;
-                let span = signature.span.to(last.span);
-                Ok(ExternItem::Fn { signature, span })
+                let (span, is_pub) = if let Some(span) = pub_span {
+                    (span.to(last.span), true)
+                } else {
+                    (signature.span.to(last.span), false)
+                };
+                Ok(ExternItem::Fn {
+                    is_pub,
+                    signature,
+                    span,
+                })
             }
             Type => {
                 let (first_span, is_pub) = if let Some(span) = pub_span {
@@ -671,12 +774,12 @@ impl<'a, 'b> Parser<'a, 'b> {
                 let span = first_span.to(last.span);
                 Ok(ExternItem::Type { is_pub, name, span })
             }
-            Global => {
+            Static => {
                 let (first_span, is_pub) = if let Some(span) = pub_span {
-                    self.expect(Global)?;
+                    self.expect(Static)?;
                     (span, true)
                 } else {
-                    (self.expect(Global)?.span, false)
+                    (self.expect(Static)?.span, false)
                 };
 
                 let name = self.name()?;
@@ -685,7 +788,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                 let last = self.expect(Semi)?;
 
                 let span = first_span.to(last.span);
-                Ok(ExternItem::Global {
+                Ok(ExternItem::Static {
                     is_pub,
                     name,
                     ty,
@@ -695,10 +798,10 @@ impl<'a, 'b> Parser<'a, 'b> {
             kind => Err(Error::Parse(
                 format!(
                     "expected {}, {} or {}, found {}",
-                    Fn.description(),
-                    Type.description(),
-                    Global.description(),
-                    kind.description()
+                    Fn.desc(),
+                    Type.desc(),
+                    Static.desc(),
+                    kind.desc()
                 ),
                 self.peek_span()?,
                 vec![],
@@ -706,17 +809,8 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn signature(
-        &mut self,
-        pub_span: Option<Span<'a, 'b>>,
-    ) -> Result<Signature<'a, 'b>, Error<'a, 'b>> {
-        let (first_span, is_pub) = if let Some(span) = pub_span {
-            self.expect(Fn)?;
-            (span, true)
-        } else {
-            (self.expect(Fn)?.span, false)
-        };
-
+    fn signature(&mut self) -> Result<Signature<'a, 'b>, Error<'a, 'b>> {
+        let first = self.expect(Fn)?;
         let name = self.name()?;
         let generic_params = if self.peek(Lt)? {
             Some(self.generic_params()?)
@@ -756,9 +850,8 @@ impl<'a, 'b> Parser<'a, 'b> {
             (None, last_span)
         };
 
-        let span = first_span.to(last_span);
+        let span = first.span.to(last_span);
         Ok(Signature {
-            is_pub,
             name,
             generic_params,
             self_kind,
@@ -775,7 +868,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
         if self.peek(Comma)? {
             return Err(Error::Parse(
-                format!("expected parameter, found {}", Comma.description()),
+                format!("expected parameter, found {}", Comma.desc()),
                 self.peek_span()?,
                 vec![],
             ));
@@ -785,23 +878,150 @@ impl<'a, 'b> Parser<'a, 'b> {
             return Ok(Vec::new());
         }
 
-        let name = self.name()?;
+        let pattern = self.pattern()?;
         self.expect(Colon)?;
         let ty = self.ty()?;
-        let span = name.span.to(ty.span());
+        let span = pattern.span().to(ty.span());
 
-        let mut params = vec![Param { name, ty, span }];
+        let mut params = vec![Param { pattern, ty, span }];
         while !self.peek(RParen)? && !self.peek([Comma, RParen])? {
             self.expect(Comma)?;
-            let name = self.name()?;
+            let pattern = self.pattern()?;
             self.expect(Colon)?;
             let ty = self.ty()?;
-            let span = name.span.to(ty.span());
-            params.push(Param { name, ty, span });
+            let span = pattern.span().to(ty.span());
+            params.push(Param { pattern, ty, span });
         }
         self.consume(Comma)?;
 
         Ok(params)
+    }
+
+    fn pattern(&mut self) -> Result<Pattern<'a, 'b>, Error<'a, 'b>> {
+        if self.peek(Under)? {
+            let span = self.expect(Under)?.span;
+            Ok(Pattern::Wild { span })
+        } else if self.peek(Ident)? {
+            let path = self.path()?;
+            if self.peek(LBrace)? {
+                self.struct_pattern(path)
+            } else if self.peek(LParen)? {
+                let (tuple, last_span) = self.tuple_pattern(true)?;
+                let span = path.span.to(last_span);
+                Ok(Pattern::Enum { path, tuple, span })
+            } else {
+                let span = path.span;
+                Ok(Pattern::Path { path, span })
+            }
+        } else if self.peek(LParen)? {
+            let (tuple, span) = self.tuple_pattern(false)?;
+            Ok(Pattern::Tuple { tuple, span })
+        } else {
+            Err(Error::Parse(
+                format!("expected pattern, found {}", self.peek_kind()?.desc()),
+                self.peek_span()?,
+                vec![],
+            ))
+        }
+    }
+
+    fn struct_pattern(&mut self, path: Path<'a, 'b>) -> Result<Pattern<'a, 'b>, Error<'a, 'b>> {
+        self.expect(LBrace)?;
+        if self.peek(RBrace)? {
+            let last = self.expect(RBrace)?;
+            let span = path.span.to(last.span);
+            return Ok(Pattern::Struct {
+                path,
+                fields: Vec::new(),
+                dots: None,
+                span,
+            });
+        } else if self.peek(Dot)? {
+            let first_dot = self.expect(Dot)?;
+            let last_dot = self.expect(Dot)?;
+            let dots = first_dot.span.to(last_dot.span);
+            let last = self.expect(RBrace)?;
+            let span = path.span.to(last.span);
+            return Ok(Pattern::Struct {
+                path,
+                fields: Vec::new(),
+                dots: Some(dots),
+                span,
+            });
+        }
+
+        let mut fields = vec![self.field_pattern()?];
+        while !self.peek(RBrace)? && !self.peek([Comma, RBrace])? && !self.peek([Comma, Dot])? {
+            self.expect(Comma)?;
+            fields.push(self.field_pattern()?);
+        }
+        self.consume(Comma)?;
+        let dots = if self.peek(Dot)? {
+            let first = self.expect(Dot)?;
+            let last = self.expect(Dot)?;
+            Some(first.span.to(last.span))
+        } else {
+            None
+        };
+        let last = self.expect(RBrace)?;
+
+        let span = path.span.to(last.span);
+        Ok(Pattern::Struct {
+            path,
+            fields,
+            dots,
+            span,
+        })
+    }
+
+    fn field_pattern(&mut self) -> Result<FieldPattern<'a, 'b>, Error<'a, 'b>> {
+        let name = self.name()?;
+        if self.consume(Colon)? {
+            let pattern = self.pattern()?;
+            let span = name.span.to(pattern.span());
+            Ok(FieldPattern {
+                name,
+                pattern: Some(pattern),
+                span,
+            })
+        } else {
+            Ok(FieldPattern {
+                name,
+                pattern: None,
+                span: name.span,
+            })
+        }
+    }
+
+    fn tuple_pattern(
+        &mut self,
+        allow_singleton: bool,
+    ) -> Result<(Vec<Pattern<'a, 'b>>, Span<'a, 'b>), Error<'a, 'b>> {
+        let first = self.expect(LParen)?;
+        if self.peek(RParen)? {
+            let last = self.expect(RParen)?;
+            let span = first.span.to(last.span);
+            return Ok((Vec::new(), span));
+        }
+
+        let mut tuple = vec![self.pattern()?];
+        while !self.peek(RParen)? && !self.peek([Comma, RParen])? {
+            self.expect(Comma)?;
+            tuple.push(self.pattern()?);
+        }
+        if !self.consume(Comma)? && !allow_singleton && tuple.len() == 1 {
+            let last_span = self.peek_span()?;
+            let span = first.span.to(last_span);
+            return Err(Error::Parse(
+                "parenthesized patterns are not allowed".to_string(),
+                span,
+                vec![],
+            ));
+        }
+        let last = self.expect(RParen)?;
+
+        let span = first.span.to(last.span);
+        Ok((tuple, span))
     }
 
     fn where_clause(&mut self) -> Result<WhereClause<'a, 'b>, Error<'a, 'b>> {
@@ -824,10 +1044,8 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     fn where_item(&mut self) -> Result<WhereItem<'a, 'b>, Error<'a, 'b>> {
-        if self.peek(Ident)? {
-            let param = self.name()?;
-            self.expect(Colon)?;
-
+        let param = self.name()?;
+        if self.consume(Colon)? {
             let mut bounds = vec![self.trait_bound()?];
             while self.peek(Plus)? {
                 self.expect(Plus)?;
@@ -835,29 +1053,22 @@ impl<'a, 'b> Parser<'a, 'b> {
             }
 
             let span = param.span.to(bounds.last().unwrap().span());
-            Ok(WhereItem::ParamBound {
+            Ok(WhereItem::Bound {
                 param,
                 bounds,
                 span,
             })
-        } else if self.peek(SelfType)? {
-            let self_type = self.expect(SelfType)?;
-            self.expect(Colon)?;
-
-            let mut bounds = vec![self.trait_bound()?];
-            while self.peek(Plus)? {
-                self.expect(Plus)?;
-                bounds.push(self.trait_bound()?);
-            }
-
-            let span = self_type.span.to(bounds.last().unwrap().span());
-            Ok(WhereItem::SelfBound { bounds, span })
+        } else if self.consume(Eq)? {
+            let ty = self.ty()?;
+            let span = param.span.to(ty.span());
+            Ok(WhereItem::Eq { param, ty, span })
         } else {
             Err(Error::Parse(
                 format!(
-                    "expected generic parameter or {}, found {}",
-                    SelfType.description(),
-                    self.peek_kind()?.description()
+                    "expected {} or {}, found {}",
+                    Colon.desc(),
+                    Eq.desc(),
+                    self.peek_kind()?.desc()
                 ),
                 self.peek_span()?,
                 vec![],
@@ -919,6 +1130,159 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
+    fn fn_def(&mut self, pub_span: Option<Span<'a, 'b>>) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+        let signature = self.signature()?;
+        let block = self.block()?;
+
+        let (span, is_pub) = if let Some(span) = pub_span {
+            (span.to(block.span), true)
+        } else {
+            (signature.span.to(block.span), false)
+        };
+        Ok(Item::Fn {
+            is_pub,
+            signature,
+            block,
+            span,
+        })
+    }
+
+    fn impl_block(
+        &mut self,
+        pub_span: Option<Span<'a, 'b>>,
+    ) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+        self.disallow_pub(pub_span, Impl)?;
+
+        let first = self.expect(Impl)?;
+        let name = self.name()?;
+        let generic_params = if self.peek(Lt)? {
+            Some(self.generic_params()?)
+        } else {
+            None
+        };
+        let as_trait = if self.consume(As)? {
+            Some(self.trait_bound()?)
+        } else {
+            None
+        };
+        let where_clause = if self.peek(Where)? {
+            Some(self.where_clause()?)
+        } else {
+            None
+        };
+
+        self.expect(LBrace)?;
+        let mut fns = Vec::new();
+        while !self.peek(RBrace)? {
+            fns.push(self.impl_fn()?);
+        }
+        let last = self.expect(RBrace)?;
+
+        let span = first.span.to(last.span);
+        Ok(Item::Impl {
+            name,
+            generic_params,
+            as_trait,
+            where_clause,
+            fns,
+            span,
+        })
+    }
+
+    fn impl_fn(&mut self) -> Result<ImplFn<'a, 'b>, Error<'a, 'b>> {
+        let pub_span = if self.peek(Pub)? {
+            Some(self.next()?.span)
+        } else {
+            None
+        };
+
+        let signature = self.signature()?;
+        let block = self.block()?;
+
+        let (span, is_pub) = if let Some(span) = pub_span {
+            (span.to(block.span), true)
+        } else {
+            (signature.span.to(block.span), false)
+        };
+
+        Ok(ImplFn {
+            is_pub,
+            signature,
+            block,
+            span,
+        })
+    }
+
+    fn const_def(&mut self, pub_span: Option<Span<'a, 'b>>) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+        let (first_span, is_pub) = self.handle_pub(pub_span, Const)?;
+        let name = self.name()?;
+        self.expect(Colon)?;
+        let ty = self.ty()?;
+        self.expect(Eq)?;
+        let expr = self.expr()?;
+        let last = self.expect(Semi)?;
+
+        let span = first_span.to(last.span);
+        Ok(Item::Const {
+            is_pub,
+            name,
+            ty,
+            expr,
+            span,
+        })
+    }
+
+    fn static_decl(&mut self, pub_span: Option<Span<'a, 'b>>) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+        let (first_span, is_pub) = self.handle_pub(pub_span, Static)?;
+        let name = self.name()?;
+        self.expect(Colon)?;
+        let ty = self.ty()?;
+        let expr = if self.consume(Eq)? {
+            Some(self.expr()?)
+        } else {
+            None
+        };
+        let last = self.expect(Semi)?;
+
+        let span = first_span.to(last.span);
+        Ok(Item::Static {
+            is_pub,
+            name,
+            ty,
+            expr,
+            span,
+        })
+    }
+
+    fn handle_pub(
+        &mut self,
+        pub_span: Option<Span<'a, 'b>>,
+        kind: TokenKind,
+    ) -> Result<(Span<'a, 'b>, bool), Error<'a, 'b>> {
+        if let Some(span) = pub_span {
+            self.expect(kind)?;
+            Ok((span, true))
+        } else {
+            Ok((self.expect(kind)?.span, false))
+        }
+    }
+
+    fn disallow_pub(
+        &mut self,
+        pub_span: Option<Span<'a, 'b>>,
+        kind: TokenKind,
+    ) -> Result<(), Error<'a, 'b>> {
+        if let Some(span) = pub_span {
+            Err(Error::Parse(
+                format!("{} not permitted before {}", Pub.desc(), kind.desc()),
+                span,
+                vec![],
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
     fn name(&mut self) -> Result<Name<'a, 'b>, Error<'a, 'b>> {
         let token = self.expect(Ident)?;
         Ok(Name {
@@ -957,12 +1321,12 @@ impl Sequence for TokenKind {
         }
 
         block! {
-            Ident, Int, Float, Char, String, ByteString, Byte, Semi, Comma, Dot, LParen,
+            Ident, Under, Int, Float, Char, String, ByteString, Byte, Semi, Comma, Dot, LParen,
             RParen, LBrace, RBrace, LBrack, RBrack, At, Tilde, QMark, Colon, Eq, Bang, Lt, Gt,
-            Dash, Plus, Star, Slash, Caret, Percent, And, As, Break, Const, Continue, Else, Enum,
-            Extern, Flase, Fn, For, Global, Goto, If, Impl, In, Let, Loop, Match, Mod, Mut, Not,
-            Or, Pub, Return, SelfType, SelfValue, Struct, Trait, Try, True, Type, Use, Where,
-            While, Eof,
+            Dash, Plus, Star, Slash, Caret, Percent, Amp, Bar, And, As, Break, Const, Continue,
+            Else, Enum, Extern, Flase, Fn, For, Goto, If, Impl, In, Let, Loop, Match, Mod, Mut,
+            Not, Or, Pub, Return, SelfType, SelfValue, Static, Struct, Trait, Try, True, Type,
+            Use, Where, While, Eof,
         }
     }
 }

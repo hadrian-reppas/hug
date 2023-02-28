@@ -1,5 +1,6 @@
+use std::cmp;
+use std::fmt::{self, Debug};
 use std::io::{self, Write};
-use std::{cmp, fmt};
 
 #[macro_export]
 macro_rules! color {
@@ -31,7 +32,7 @@ macro_rules! reset {
     };
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct Span<'a, 'b> {
     pub text: &'a str,
     pub code: &'a str,
@@ -267,7 +268,17 @@ fn count_leading_spaces(s: &str) -> usize {
     n
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+impl Debug for Span<'_, '_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Span")
+            .field("text", &self.text)
+            .field("line", &self.location.line)
+            .field("column", &self.location.column)
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Location<'a> {
     pub line: usize,
     pub column: usize,

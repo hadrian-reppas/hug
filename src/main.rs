@@ -27,23 +27,51 @@ type MyResult<T> = Result<T, LongErrorType>;
 
 mod math;
 pub mod helpers;
-pub mod math @ "misc/math.hug";
 
 extern {
     type Module;
     pub type Function;
 
-    global COUNTER: u8;
-    pub global FLAG: bool;
+    static COUNTER: u8;
+    pub static FLAG: bool;
 
     fn take<T>(*self, x: u8, y: Vec<T>,) -> T
     where
-        Self: Fn(u8) -> () + From<T>,
-        T: path::to::Trait<> + Clone;
+        T: Fn(u8) -> () + From<T>,
+        U: path::to::Trait<> + Clone,
+        V = Vec<[usize; 3]>;
 }
 
-// pub use ds::Vector;
+trait CloneIterator<T>: Clone + Debug
+where
+    T: Clone + Debug,
+{
+    fn next(*self) -> Option<T>; 
+    fn count(self) -> usize {}
+}
 
+fn g<T>(*self) where T: Clone {}
+pub fn f(x: u32, _: u64) {
+    let Struct { x, y: Some(x, _), .. };
+    let path::to::Enum::Variant(S { .. }, _,);
+}
+
+impl Vec<T> as Fn(usize) -> T where T: Clone {
+    fn call(*self, index: usize) -> T {}
+}
+
+impl Vec<T> as Hash where T: Hash {
+    fn hash(*self) -> u64 {}
+}
+
+fn compose<F, G, A, B, C>(f: F, g: G, a: A) -> C
+where
+    F: Fn(A) -> B,
+    G: Fn(B) -> C,
+{}
+
+pub static COUNTER: usize;
+static COUNTER: usize;
 "#;
 
 const FILE_NAME: &str = "main.hug";
@@ -56,6 +84,6 @@ fn main() {
                 item.span().println();
             }
         }
-        Err(error) => error.println(),
+        Err(error) => dbg!(error).println(),
     }
 }

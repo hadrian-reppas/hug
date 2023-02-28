@@ -108,7 +108,6 @@ impl<'a, 'b> Tokens<'a, 'b> {
                 "false" => TokenKind::Flase,
                 "fn" => TokenKind::Fn,
                 "for" => TokenKind::For,
-                "global" => TokenKind::Global,
                 "goto" => TokenKind::Goto,
                 "if" => TokenKind::If,
                 "impl" => TokenKind::Impl,
@@ -124,6 +123,7 @@ impl<'a, 'b> Tokens<'a, 'b> {
                 "return" => TokenKind::Return,
                 "Self" => TokenKind::SelfType,
                 "self" => TokenKind::SelfValue,
+                "static" => TokenKind::Static,
                 "struct" => TokenKind::Struct,
                 "trait" => TokenKind::Trait,
                 "try" => TokenKind::Try,
@@ -132,6 +132,14 @@ impl<'a, 'b> Tokens<'a, 'b> {
                 "use" => TokenKind::Use,
                 "where" => TokenKind::Where,
                 "while" => TokenKind::While,
+                "_" => TokenKind::Under,
+                name if name.chars().all(|c| c == '_') => {
+                    return Err(Error::Lex(
+                        format!("illegal identifier `{}`", name),
+                        span,
+                        vec![],
+                    ))
+                }
                 _ => TokenKind::Ident,
             };
 
@@ -184,6 +192,10 @@ impl<'a, 'b> Tokens<'a, 'b> {
             token!(Caret)
         } else if self.suffix.starts_with('%') {
             token!(Percent)
+        } else if self.suffix.starts_with('&') {
+            token!(Amp)
+        } else if self.suffix.starts_with('|') {
+            token!(Bar)
         } else if self.suffix.starts_with("//") {
             let mut len = 0;
             for c in self.suffix.chars() {
@@ -472,6 +484,7 @@ fn is_name_continue(c: char) -> bool {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TokenKind {
     Ident,
+    Under,
 
     // literals
     Int,
@@ -505,6 +518,8 @@ pub enum TokenKind {
     Slash,
     Caret,
     Percent,
+    Amp,
+    Bar,
 
     // keywords
     And,
@@ -518,7 +533,6 @@ pub enum TokenKind {
     Flase,
     Fn,
     For,
-    Global,
     Goto,
     If,
     Impl,
@@ -534,6 +548,7 @@ pub enum TokenKind {
     Return,
     SelfType,
     SelfValue,
+    Static,
     Struct,
     Trait,
     True,
@@ -547,9 +562,10 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
-    pub fn description(self) -> &'static str {
+    pub fn desc(self) -> &'static str {
         match self {
             TokenKind::Ident => "identifier",
+            TokenKind::Under => "`_`",
             TokenKind::Int => "integer",
             TokenKind::Float => "float",
             TokenKind::Char => "character",
@@ -579,6 +595,8 @@ impl TokenKind {
             TokenKind::Slash => "`/`",
             TokenKind::Caret => "`^`",
             TokenKind::Percent => "`%`",
+            TokenKind::Amp => "`&`",
+            TokenKind::Bar => "`|`",
             TokenKind::And => "`and`",
             TokenKind::As => "`as`",
             TokenKind::Break => "`break`",
@@ -590,7 +608,6 @@ impl TokenKind {
             TokenKind::Flase => "`false`",
             TokenKind::Fn => "`fn`",
             TokenKind::For => "`for`",
-            TokenKind::Global => "`global`",
             TokenKind::Goto => "`goto`",
             TokenKind::If => "`if`",
             TokenKind::Impl => "`impl`",
@@ -606,6 +623,7 @@ impl TokenKind {
             TokenKind::Return => "`return`",
             TokenKind::SelfType => "`Self`",
             TokenKind::SelfValue => "`self`",
+            TokenKind::Static => "`static`",
             TokenKind::Struct => "`struct`",
             TokenKind::Trait => "`trait`",
             TokenKind::Try => "`try`",
