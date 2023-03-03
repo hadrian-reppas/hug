@@ -1,0 +1,92 @@
+use std::collections::HashMap;
+use std::fs::{
+    io,
+    vec::Vec as Vector,
+    File,
+};
+
+pub struct Vec<T> {
+    ptr: *Vec<T>,
+    tup: (String, path::to::Type, !, ()),
+    pub count: u8<Self, fn(!,) -> (!,),>,
+}
+
+pub enum Option<T> {
+    Some(T,),
+    None,
+}
+
+type MyResult<T> = Result<T, LongErrorType>;
+
+mod math;
+pub mod helpers;
+
+extern {
+    type Module;
+    pub type Function;
+
+    static COUNTER: u8;
+    pub static FLAG: bool;
+
+    fn take<T>(*self, x: u8, y: Vec<T>,) -> T
+    where
+        T: Fn(u8) -> () + From<T>,
+        U: path::to::Trait<> + Clone,
+        V = Vec<[usize; 3]>;
+}
+
+trait CloneIterator<T>: Clone + Debug
+where
+    T: Clone + Debug,
+{
+    fn next(*self) -> Option<T>; 
+    fn count(self) -> usize {}
+}
+
+fn g<T>(*self) where T: Clone {}
+pub fn f(x: u32, _: u64) {
+    let Struct { x, y: Some(x, _), .. };
+    let path::to::Enum::Variant(S { .. }, _,);
+    let []: [u8; 0];
+    let (): ();
+}
+
+impl Vec<T> where T: Debug {}
+
+impl Vec<T> as Fn(usize) -> T where T: Clone {
+    fn call(*self, index: usize) -> T {}
+}
+
+fn compose<F, G, A, B, C>(f: F, g: G, a: A) -> C
+where
+    F: Fn(A) -> B,
+    G: Fn(B) -> C,
+{}
+
+pub static COUNTER: usize = 1;
+static COUNTER: usize = "string";
+
+const BUFFER: [u8; 8] = b"abcdefgh";
+const INTS: [i32; 3] = [1, 2, 3];
+const TUPLE: (i32, usize) = -((1, 1z,));
+
+impl Vec<T> as Hash where T: Hash {
+    fn hash(*self) -> u64 {
+        while true { let x = false; };
+        1;
+    }
+}
+
+fn if_else() {
+    if 1 {} else if let Some(x) = 3 {} else if true {} else {}
+}
+
+fn match_expr() {
+    match true {
+        Some(x) => false,
+        None => loop {}
+        Struct { .. } => while false {}
+        _ => 1,
+        _ => false,
+    }
+}

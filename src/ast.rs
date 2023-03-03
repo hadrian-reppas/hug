@@ -648,7 +648,7 @@ impl Debug for TraitItem<'_, '_> {
 
 pub struct Block<'a, 'b> {
     pub stmts: Vec<Stmt<'a, 'b>>,
-    pub expr: Option<Expr<'a, 'b>>,
+    pub expr: Option<Box<Expr<'a, 'b>>>,
     pub span: Span<'a, 'b>,
 }
 
@@ -703,14 +703,545 @@ impl Debug for Stmt<'_, '_> {
     }
 }
 
-#[derive(Debug)]
 pub enum Expr<'a, 'b> {
-    __marker(std::marker::PhantomData<&'a &'b ()>),
+    Array {
+        exprs: Vec<Expr<'a, 'b>>,
+        span: Span<'a, 'b>,
+    },
+    Call {
+        func: Box<Expr<'a, 'b>>,
+        args: Vec<Expr<'a, 'b>>,
+        span: Span<'a, 'b>,
+    },
+    MethodCall {
+        receiver: Box<Expr<'a, 'b>>,
+        path: GenericPath<'a, 'b>,
+        args: Vec<Expr<'a, 'b>>,
+        span: Span<'a, 'b>,
+    },
+    Tuple {
+        exprs: Vec<Expr<'a, 'b>>,
+        span: Span<'a, 'b>,
+    },
+    Binary {
+        op: BinOp,
+        lhs: Box<Expr<'a, 'b>>,
+        rhs: Box<Expr<'a, 'b>>,
+        op_span: Span<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+    Unary {
+        op: UnOp,
+        expr: Box<Expr<'a, 'b>>,
+        op_span: Span<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+    Literal {
+        kind: LiteralKind,
+        span: Span<'a, 'b>,
+    },
+    Cast {
+        expr: Box<Expr<'a, 'b>>,
+        ty: Ty<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+    If {
+        test: Box<Expr<'a, 'b>>,
+        block: Block<'a, 'b>,
+        else_kind: ElseKind<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+    IfLet {
+        pattern: Pattern<'a, 'b>,
+        expr: Box<Expr<'a, 'b>>,
+        block: Block<'a, 'b>,
+        else_kind: ElseKind<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+    While {
+        test: Box<Expr<'a, 'b>>,
+        block: Block<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+    WhileLet {
+        pattern: Pattern<'a, 'b>,
+        expr: Box<Expr<'a, 'b>>,
+        block: Block<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+    Match {
+        expr: Box<Expr<'a, 'b>>,
+        arms: Vec<MatchArm<'a, 'b>>,
+        span: Span<'a, 'b>,
+    },
+    Block {
+        block: Block<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+    For {
+        pattern: Pattern<'a, 'b>,
+        iter: Box<Expr<'a, 'b>>,
+        block: Block<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+    Loop {
+        block: Block<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+    TryBlock {
+        block: Block<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+    Label {
+        label: Label<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+    Goto {
+        label: Label<'a, 'b>,
+        expr: Option<Box<Expr<'a, 'b>>>,
+        span: Span<'a, 'b>,
+    },
+    Try {
+        expr: Box<Expr<'a, 'b>>,
+        qmark_span: Span<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+    Assign {
+        target: Box<Expr<'a, 'b>>,
+        rhs: Box<Expr<'a, 'b>>,
+        span: Span<'a, 'b>,
+    },
+    AssignOp {
+        op: AssignOp,
+        target: Box<Expr<'a, 'b>>,
+        rhs: Box<Expr<'a, 'b>>,
+        op_span: Span<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+    Field {
+        expr: Box<Expr<'a, 'b>>,
+        name: Name<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+    Index {
+        expr: Box<Expr<'a, 'b>>,
+        index: Box<Expr<'a, 'b>>,
+        span: Span<'a, 'b>,
+    },
+    Range {
+        low: Option<Box<Expr<'a, 'b>>>,
+        high: Option<Box<Expr<'a, 'b>>>,
+        range_span: Span<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+    Path {
+        path: GenericPath<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+    Break {
+        expr: Option<Box<Expr<'a, 'b>>>,
+        span: Span<'a, 'b>,
+    },
+    Continue {
+        span: Span<'a, 'b>,
+    },
+    Return {
+        expr: Option<Box<Expr<'a, 'b>>>,
+        span: Span<'a, 'b>,
+    },
+    Struct {
+        path: GenericPath<'a, 'b>,
+        fields: Vec<ExprField<'a, 'b>>,
+        span: Span<'a, 'b>,
+    },
+    Repeat {
+        expr: Box<Expr<'a, 'b>>,
+        count: Span<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
 }
 
 impl<'a, 'b> Expr<'a, 'b> {
     pub fn span(&self) -> Span<'a, 'b> {
-        todo!()
+        match self {
+            Expr::Array { span, .. }
+            | Expr::Call { span, .. }
+            | Expr::MethodCall { span, .. }
+            | Expr::Tuple { span, .. }
+            | Expr::Binary { span, .. }
+            | Expr::Unary { span, .. }
+            | Expr::Literal { span, .. }
+            | Expr::Cast { span, .. }
+            | Expr::If { span, .. }
+            | Expr::IfLet { span, .. }
+            | Expr::While { span, .. }
+            | Expr::WhileLet { span, .. }
+            | Expr::Match { span, .. }
+            | Expr::Block { span, .. }
+            | Expr::For { span, .. }
+            | Expr::Loop { span, .. }
+            | Expr::TryBlock { span, .. }
+            | Expr::Label { span, .. }
+            | Expr::Goto { span, .. }
+            | Expr::Try { span, .. }
+            | Expr::Assign { span, .. }
+            | Expr::AssignOp { span, .. }
+            | Expr::Field { span, .. }
+            | Expr::Index { span, .. }
+            | Expr::Range { span, .. }
+            | Expr::Path { span, .. }
+            | Expr::Break { span, .. }
+            | Expr::Continue { span, .. }
+            | Expr::Return { span, .. }
+            | Expr::Struct { span, .. }
+            | Expr::Repeat { span, .. } => *span,
+        }
+    }
+
+    pub fn has_block(&self) -> bool {
+        matches!(
+            self,
+            Expr::If { .. }
+                | Expr::IfLet { .. }
+                | Expr::While { .. }
+                | Expr::WhileLet { .. }
+                | Expr::Match { .. }
+                | Expr::Block { .. }
+                | Expr::For { .. }
+                | Expr::Loop { .. }
+                | Expr::TryBlock { .. }
+        )
+    }
+}
+
+impl Debug for Expr<'_, '_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Expr::Array { exprs, .. } => f.debug_tuple("Array").field(exprs).finish(),
+            Expr::Call { func, args, .. } => f
+                .debug_struct("Call")
+                .field("func", func)
+                .field("args", args)
+                .finish(),
+            Expr::MethodCall {
+                receiver,
+                path,
+                args,
+                ..
+            } => f
+                .debug_struct("MethodCall")
+                .field("receiver", receiver)
+                .field("path", path)
+                .field("args", args)
+                .finish(),
+            Expr::Tuple { exprs, .. } => f.debug_tuple("Tuple").field(exprs).finish(),
+            Expr::Binary { op, lhs, rhs, .. } => f
+                .debug_struct("Binary")
+                .field("op", op)
+                .field("lhs", lhs)
+                .field("rhs", rhs)
+                .finish(),
+            Expr::Unary { op, expr, .. } => f
+                .debug_struct("Unary")
+                .field("op", op)
+                .field("expr", expr)
+                .finish(),
+            Expr::Literal { kind, span } => f
+                .debug_struct("Literal")
+                .field("kind", kind)
+                .field("span", span)
+                .finish(),
+            Expr::Cast { expr, ty, .. } => f
+                .debug_struct("Cast")
+                .field("expr", expr)
+                .field("ty", ty)
+                .finish(),
+            Expr::If {
+                test,
+                block,
+                else_kind,
+                ..
+            } => f
+                .debug_struct("If")
+                .field("test", test)
+                .field("block", block)
+                .field("else_kind", else_kind)
+                .finish(),
+            Expr::IfLet {
+                pattern,
+                expr,
+                block,
+                else_kind,
+                ..
+            } => f
+                .debug_struct("IfLet")
+                .field("pattern", pattern)
+                .field("expr", expr)
+                .field("block", block)
+                .field("else_kind", else_kind)
+                .finish(),
+            Expr::While { test, block, .. } => f
+                .debug_struct("While")
+                .field("test", test)
+                .field("block", block)
+                .finish(),
+            Expr::WhileLet {
+                pattern,
+                expr,
+                block,
+                ..
+            } => f
+                .debug_struct("WhileLet")
+                .field("pattern", pattern)
+                .field("expr", expr)
+                .field("block", block)
+                .finish(),
+            Expr::Match { expr, arms, .. } => f
+                .debug_struct("Match")
+                .field("expr", expr)
+                .field("arms", arms)
+                .finish(),
+            Expr::Block { block, .. } => f.debug_tuple("Block").field(block).finish(),
+            Expr::For {
+                pattern,
+                iter,
+                block,
+                ..
+            } => f
+                .debug_struct("For")
+                .field("pattern", pattern)
+                .field("iter", iter)
+                .field("block", block)
+                .finish(),
+            Expr::Loop { block, .. } => f.debug_tuple("Loop").field(block).finish(),
+            Expr::TryBlock { block, .. } => f.debug_tuple("TryBlock").field(block).finish(),
+            Expr::Label { label, .. } => f.debug_tuple("Label").field(label).finish(),
+            Expr::Goto { label, expr, .. } => f
+                .debug_struct("Goto")
+                .field("label", label)
+                .field("expr", expr)
+                .finish(),
+            Expr::Try { expr, .. } => f.debug_tuple("Try").field(expr).finish(),
+            Expr::Assign { target, rhs, .. } => f
+                .debug_struct("Assign")
+                .field("target", target)
+                .field("rhs", rhs)
+                .finish(),
+            Expr::AssignOp {
+                op, target, rhs, ..
+            } => f
+                .debug_struct("AssignOp")
+                .field("op", op)
+                .field("target", target)
+                .field("rhs", rhs)
+                .finish(),
+            Expr::Field { expr, name, .. } => f
+                .debug_struct("Field")
+                .field("expr", expr)
+                .field("name", name)
+                .finish(),
+            Expr::Index { expr, index, .. } => f
+                .debug_struct("Index")
+                .field("expr", expr)
+                .field("index", index)
+                .finish(),
+            Expr::Range { low, high, .. } => f
+                .debug_struct("Range")
+                .field("low", low)
+                .field("high", high)
+                .finish(),
+            Expr::Path { path, .. } => f.debug_tuple("Path").field(path).finish(),
+            Expr::Break { expr, .. } => f.debug_tuple("Break").field(expr).finish(),
+            Expr::Continue { .. } => f.debug_tuple("Continue").finish(),
+            Expr::Return { expr, .. } => f.debug_tuple("Return").field(expr).finish(),
+            Expr::Struct { path, fields, .. } => f
+                .debug_struct("Struct")
+                .field("path", path)
+                .field("fields", fields)
+                .finish(),
+            Expr::Repeat { expr, count, .. } => f
+                .debug_struct("Repeat")
+                .field("expr", expr)
+                .field("count", count)
+                .finish(),
+        }
+    }
+}
+
+pub struct GenericPath<'a, 'b> {
+    pub segments: GenericSegment<'a, 'b>,
+    pub span: Span<'a, 'b>,
+}
+
+impl Debug for GenericPath<'_, '_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("GenericPath").field(&self.segments).finish()
+    }
+}
+
+pub struct GenericSegment<'a, 'b> {
+    pub name: Name<'a, 'b>,
+    pub generic_args: Option<GenericArgs<'a, 'b>>,
+    pub span: Span<'a, 'b>,
+}
+
+impl Debug for GenericSegment<'_, '_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GenericSegment")
+            .field("name", &self.name)
+            .field("generic_args", &self.generic_args)
+            .finish()
+    }
+}
+
+pub struct MatchArm<'a, 'b> {
+    pub pattern: Pattern<'a, 'b>,
+    pub body: Expr<'a, 'b>,
+    pub span: Span<'a, 'b>,
+}
+
+impl Debug for MatchArm<'_, '_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MatchArm")
+            .field("pattern", &self.pattern)
+            .field("body", &self.body)
+            .finish()
+    }
+}
+
+#[derive(Debug)]
+pub enum LiteralKind {
+    Int,
+    Float,
+    Char,
+    String,
+    Byte,
+    ByteString,
+    Bool,
+}
+
+#[derive(Debug)]
+pub enum BinOp {}
+
+#[derive(Debug)]
+pub enum UnOp {
+    Deref,
+    Not,
+    Neg,
+    AddrOf,
+}
+
+#[derive(Debug)]
+pub enum AssignOp {}
+
+pub struct Label<'a, 'b> {
+    pub name: Name<'a, 'b>,
+    pub span: Span<'a, 'b>,
+}
+
+impl Debug for Label<'_, '_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Label").field("name", &self.name).finish()
+    }
+}
+
+pub enum ElseKind<'a, 'b> {
+    Else {
+        block: Block<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+    ElseIf {
+        test: Box<Expr<'a, 'b>>,
+        block: Block<'a, 'b>,
+        else_kind: Box<ElseKind<'a, 'b>>,
+        span: Span<'a, 'b>,
+    },
+    ElseIfLet {
+        pattern: Pattern<'a, 'b>,
+        expr: Box<Expr<'a, 'b>>,
+        block: Block<'a, 'b>,
+        else_kind: Box<ElseKind<'a, 'b>>,
+        span: Span<'a, 'b>,
+    },
+    Nothing {
+        span: Span<'a, 'b>,
+    },
+}
+
+impl<'a, 'b> ElseKind<'a, 'b> {
+    pub fn span(&self) -> Span<'a, 'b> {
+        match self {
+            ElseKind::Else { span, .. }
+            | ElseKind::ElseIf { span, .. }
+            | ElseKind::ElseIfLet { span, .. }
+            | ElseKind::Nothing { span, .. } => *span,
+        }
+    }
+}
+
+impl Debug for ElseKind<'_, '_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            ElseKind::Else { block, .. } => f.debug_tuple("Else").field(block).finish(),
+            ElseKind::ElseIf {
+                test,
+                block,
+                else_kind,
+                ..
+            } => f
+                .debug_struct("ElseIf")
+                .field("test", test)
+                .field("block", block)
+                .field("else_kind", else_kind)
+                .finish(),
+            ElseKind::ElseIfLet {
+                pattern,
+                expr,
+                block,
+                else_kind,
+                ..
+            } => f
+                .debug_struct("ElseIfLet")
+                .field("pattern", pattern)
+                .field("expr", expr)
+                .field("block", block)
+                .field("else_kind", else_kind)
+                .finish(),
+            ElseKind::Nothing { .. } => f.debug_tuple("Nothing").finish(),
+        }
+    }
+}
+
+pub enum ExprField<'a, 'b> {
+    Name {
+        name: Name<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+    Expr {
+        name: Name<'a, 'b>,
+        expr: Expr<'a, 'b>,
+        span: Span<'a, 'b>,
+    },
+}
+
+impl<'a, 'b> ExprField<'a, 'b> {
+    pub fn span(&self) -> Span<'a, 'b> {
+        match self {
+            ExprField::Name { span, .. } | ExprField::Expr { span, .. } => *span,
+        }
+    }
+}
+
+impl Debug for ExprField<'_, '_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            ExprField::Name { name, .. } => f.debug_tuple("Name").field(name).finish(),
+            ExprField::Expr { name, expr, .. } => f
+                .debug_struct("Expr")
+                .field("name", name)
+                .field("expr", expr)
+                .finish(),
+        }
     }
 }
 
@@ -737,6 +1268,10 @@ pub enum Pattern<'a, 'b> {
         tuple: Vec<Pattern<'a, 'b>>,
         span: Span<'a, 'b>,
     },
+    Array {
+        array: Vec<Pattern<'a, 'b>>,
+        span: Span<'a, 'b>,
+    },
 }
 
 impl<'a, 'b> Pattern<'a, 'b> {
@@ -746,7 +1281,8 @@ impl<'a, 'b> Pattern<'a, 'b> {
             | Pattern::Path { span, .. }
             | Pattern::Struct { span, .. }
             | Pattern::Enum { span, .. }
-            | Pattern::Tuple { span, .. } => *span,
+            | Pattern::Tuple { span, .. }
+            | Pattern::Array { span, .. } => *span,
         }
     }
 }
@@ -770,6 +1306,7 @@ impl Debug for Pattern<'_, '_> {
                 .field("tuple", tuple)
                 .finish(),
             Pattern::Tuple { tuple, .. } => f.debug_tuple("Tuple").field(tuple).finish(),
+            Pattern::Array { array, .. } => f.debug_tuple("Array").field(array).finish(),
         }
     }
 }

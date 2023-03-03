@@ -2,6 +2,10 @@ use std::cmp;
 use std::fmt::{self, Debug};
 use std::io::{self, Write};
 
+use crate::error::Error;
+
+const MAX_LINES: usize = 4;
+
 #[macro_export]
 macro_rules! color {
     ($color:ident, $apply:expr) => {
@@ -49,6 +53,27 @@ impl<'a, 'b> Span<'a, 'b> {
         }
     }
 
+    pub fn by(self, other: Self) -> Result<Self, Error<'a, 'b>> {
+        let both = self.to(other);
+        if both.text.len() == self.text.len() + other.text.len() {
+            Ok(both)
+        } else {
+            Err(Error::Parse(
+                format!(
+                    "there should be no space between `{}` and `{}`",
+                    self.text, other.text
+                ),
+                both,
+                vec![],
+            ))
+        }
+    }
+
+    pub fn after(mut self) -> Self {
+        self.text = &self.text[self.text.len()..];
+        self
+    }
+
     pub fn print(self) {
         self.write(&mut io::stdout(), true).unwrap();
     }
@@ -92,8 +117,8 @@ impl<'a, 'b> Span<'a, 'b> {
         let last_len = lines.last().unwrap().1.len();
 
         let mut ellipsis = false;
-        if lines.len() > 5 {
-            lines.drain(2..(lines.len() - 2));
+        if lines.len() > 2 * MAX_LINES + 1 {
+            lines.drain(MAX_LINES..(lines.len() - MAX_LINES));
             ellipsis = true;
         }
 
@@ -150,7 +175,7 @@ impl<'a, 'b> Span<'a, 'b> {
         }
 
         for (j, (i, line)) in lines.iter().skip(1).enumerate() {
-            if ellipsis && j == 1 {
+            if ellipsis && j == MAX_LINES - 1 {
                 writeln!(
                     out,
                     "{}{}...{} {}|{}",

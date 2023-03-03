@@ -105,7 +105,7 @@ impl<'a, 'b> Tokens<'a, 'b> {
                 "else" => TokenKind::Else,
                 "enum" => TokenKind::Enum,
                 "extern" => TokenKind::Extern,
-                "false" => TokenKind::Flase,
+                "false" => TokenKind::False,
                 "fn" => TokenKind::Fn,
                 "for" => TokenKind::For,
                 "goto" => TokenKind::Goto,
@@ -218,7 +218,7 @@ impl<'a, 'b> Tokens<'a, 'b> {
         } else {
             let c = self.suffix.chars().next().unwrap();
             Err(Error::Lex(
-                format!("unexpected character {c:?}"),
+                format!("unexpected character {:?}", c),
                 self.make_span(1),
                 vec![],
             ))
@@ -530,7 +530,7 @@ pub enum TokenKind {
     Else,
     Enum,
     Extern,
-    Flase,
+    False,
     Fn,
     For,
     Goto,
@@ -605,7 +605,7 @@ impl TokenKind {
             TokenKind::Else => "`else`",
             TokenKind::Enum => "`enum`",
             TokenKind::Extern => "`extern`",
-            TokenKind::Flase => "`false`",
+            TokenKind::False => "`false`",
             TokenKind::Fn => "`fn`",
             TokenKind::For => "`for`",
             TokenKind::Goto => "`goto`",
@@ -634,5 +634,49 @@ impl TokenKind {
             TokenKind::While => "`while`",
             TokenKind::Eof => "end of file",
         }
+    }
+
+    pub fn is_expr_start(self) -> bool {
+        matches!(
+            self,
+            TokenKind::Int
+                | TokenKind::Float
+                | TokenKind::Char
+                | TokenKind::String
+                | TokenKind::Byte
+                | TokenKind::ByteString
+                | TokenKind::True
+                | TokenKind::False
+                | TokenKind::Dash
+                | TokenKind::Bang
+                | TokenKind::Not
+                | TokenKind::Amp
+                | TokenKind::Ident
+                | TokenKind::LParen
+                | TokenKind::LBrack
+                | TokenKind::LBrace
+                | TokenKind::If
+                | TokenKind::While
+                | TokenKind::Match
+                | TokenKind::For
+                | TokenKind::Loop
+                | TokenKind::Try
+                | TokenKind::Goto
+                | TokenKind::Break
+                | TokenKind::Continue
+                | TokenKind::Return
+        )
+    }
+
+    pub fn is_expr_end(self) -> bool {
+        matches!(
+            self,
+            TokenKind::Semi
+                | TokenKind::Comma
+                | TokenKind::LBrace
+                | TokenKind::RParen
+                | TokenKind::RBrace
+                | TokenKind::RBrack
+        )
     }
 }

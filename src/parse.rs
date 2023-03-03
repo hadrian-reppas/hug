@@ -652,7 +652,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                     self.expect(Semi)?;
                 }
                 _ => {
-                    let expr = self.expr()?;
+                    let expr = self.expr(BindingPower::Start)?;
                     if self.peek(Semi)? {
                         let last = self.expect(Semi)?;
                         let span = expr.span().to(last.span);
@@ -662,9 +662,12 @@ impl<'a, 'b> Parser<'a, 'b> {
                         let span = first.span.to(last.span);
                         return Ok(Block {
                             stmts,
-                            expr: Some(expr),
+                            expr: Some(Box::new(expr)),
                             span,
                         });
+                    } else if expr.has_block() {
+                        let span = expr.span();
+                        stmts.push(Stmt::Expr { expr, span });
                     } else {
                         return Err(Error::Parse(
                             format!(
@@ -701,7 +704,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         };
 
         let expr = if self.consume(Eq)? {
-            Some(self.expr()?)
+            Some(self.expr(BindingPower::Start)?)
         } else {
             None
         };
@@ -716,8 +719,370 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn expr(&mut self) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
+    fn expr(&mut self, bp: BindingPower) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
+        macro_rules! literal {
+            ($token:ident, $kind:ident) => {{
+                let span = self.expect($token)?.span;
+                Expr::Literal {
+                    kind: LiteralKind::$kind,
+                    span,
+                }
+            }};
+        }
+
+        macro_rules! uop {
+            ($token:ident, $kind:ident, $bp:expr) => {{
+                let op_span = self.expect($token)?.span;
+                let expr = self.expr($bp)?;
+                let span = op_span.to(expr.span());
+                Expr::Unary {
+                    op: UnOp::$kind,
+                    expr: Box::new(expr),
+                    op_span,
+                    span,
+                }
+            }};
+        }
+
+        let mut lhs = match self.peek_kind()? {
+            Int => literal!(Int, Int),
+            Float => literal!(Float, Float),
+            Char => literal!(Char, Char),
+            String => literal!(String, String),
+            Byte => literal!(Byte, Byte),
+            ByteString => literal!(ByteString, ByteString),
+            True => literal!(True, Bool),
+            False => literal!(False, Bool),
+
+            Dash => uop!(Dash, Neg, BindingPower::Prefix),
+            Bang => uop!(Bang, Not, BindingPower::Prefix),
+            Not => uop!(Not, Not, BindingPower::Prefix),
+            Star => uop!(Star, Deref, BindingPower::Prefix),
+            Amp => uop!(Amp, AddrOf, BindingPower::Prefix),
+
+            Ident => self.ident_expr()?,
+
+            LParen => self.paren_expr()?,
+            LBrack => self.brack_expr()?,
+            LBrace => {
+                let block = self.block()?;
+                let span = block.span;
+                Expr::Block { block, span }
+            }
+
+            If => self.if_expr()?,
+            While => self.while_expr()?,
+            Match => self.match_expr()?,
+            For => {
+                let first = self.expect(For)?;
+                let pattern = self.pattern()?;
+                self.expect(In)?;
+                let iter = self.expr(BindingPower::Start)?;
+                let block = self.block()?;
+                let span = first.span.to(block.span);
+                Expr::For {
+                    pattern,
+                    iter: Box::new(iter),
+                    block,
+                    span,
+                }
+            }
+            Loop => {
+                let first = self.expect(Loop)?;
+                let block = self.block()?;
+                let span = first.span.to(block.span);
+                Expr::Loop { block, span }
+            }
+            Try => {
+                let first = self.expect(Try)?;
+                let block = self.block()?;
+                let span = first.span.to(block.span);
+                Expr::TryBlock { block, span }
+            }
+            Goto => {
+                let first = self.expect(Goto)?;
+                let label = self.label()?;
+                if self.peek_kind()?.is_expr_start() {
+                    let expr = self.expr(BindingPower::Start)?;
+                    let span = first.span.to(expr.span());
+                    Expr::Goto {
+                        label,
+                        expr: Some(Box::new(expr)),
+                        span,
+                    }
+                } else {
+                    Expr::Goto {
+                        label,
+                        expr: None,
+                        span: first.span,
+                    }
+                }
+            }
+            Break => {
+                let first = self.expect(Break)?;
+                if self.peek_kind()?.is_expr_start() {
+                    let expr = self.expr(BindingPower::Start)?;
+                    let span = first.span.to(expr.span());
+                    Expr::Break {
+                        expr: Some(Box::new(expr)),
+                        span,
+                    }
+                } else {
+                    Expr::Break {
+                        expr: None,
+                        span: first.span,
+                    }
+                }
+            }
+            Continue => {
+                let span = self.expect(Continue)?.span;
+                Expr::Continue { span }
+            }
+            Return => {
+                let first = self.expect(Return)?;
+                if self.peek_kind()?.is_expr_start() {
+                    let expr = self.expr(BindingPower::Start)?;
+                    let span = first.span.to(expr.span());
+                    Expr::Return {
+                        expr: Some(Box::new(expr)),
+                        span,
+                    }
+                } else {
+                    Expr::Return {
+                        expr: None,
+                        span: first.span,
+                    }
+                }
+            }
+            At => {
+                let label = self.label()?;
+                let span = label.span;
+                Expr::Label { label, span }
+            }
+
+            kind => {
+                return Err(Error::Parse(
+                    format!("expected expression, found {}", kind.desc()),
+                    self.peek_span()?,
+                    vec![],
+                ))
+            }
+        };
+
+        // TODO: loop {}
+
+        Ok(lhs)
+    }
+
+    fn paren_expr(&mut self) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
+        let first = self.expect(LParen)?;
+        if self.peek(RParen)? {
+            let last = self.expect(RParen)?;
+            let span = first.span.to(last.span);
+            return Ok(Expr::Tuple {
+                exprs: Vec::new(),
+                span,
+            });
+        }
+
+        let expr = self.expr(BindingPower::Start)?;
+        if self.peek(RParen)? {
+            self.expect(RParen)?;
+            return Ok(expr);
+        }
+
+        let mut exprs = vec![expr];
+        while !self.peek(RParen)? && !self.peek([Comma, RParen])? {
+            self.expect(Comma)?;
+            exprs.push(self.expr(BindingPower::Start)?);
+        }
+        self.consume(Comma)?;
+        let last = self.expect(RParen)?;
+
+        let span = first.span.to(last.span);
+        Ok(Expr::Tuple { exprs, span })
+    }
+
+    fn brack_expr(&mut self) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
+        let first = self.expect(LBrack)?;
+        if self.peek(RBrack)? {
+            let last = self.expect(RBrack)?;
+            let span = first.span.to(last.span);
+            return Ok(Expr::Array {
+                exprs: Vec::new(),
+                span,
+            });
+        }
+
+        let mut exprs = vec![self.expr(BindingPower::Start)?];
+        while !self.peek(RBrack)? && !self.peek([Comma, RBrack])? {
+            self.expect(Comma)?;
+            exprs.push(self.expr(BindingPower::Start)?);
+        }
+        self.consume(Comma)?;
+        let last = self.expect(RBrack)?;
+
+        let span = first.span.to(last.span);
+        Ok(Expr::Array { exprs, span })
+    }
+
+    fn ident_expr(&mut self) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
         todo!()
+    }
+
+    fn if_expr(&mut self) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
+        let first = self.expect(If)?;
+        if self.consume(Let)? {
+            let pattern = self.pattern()?;
+            self.expect(Eq)?;
+            let expr = self.expr(BindingPower::Start)?;
+            let block = self.block()?;
+            let else_kind = self.else_kind(block.span)?;
+
+            let span = first.span.to(else_kind.span());
+            Ok(Expr::IfLet {
+                pattern,
+                expr: Box::new(expr),
+                block,
+                else_kind,
+                span,
+            })
+        } else {
+            let test = self.expr(BindingPower::Start)?;
+            let block = self.block()?;
+            let else_kind = self.else_kind(block.span)?;
+
+            let span = first.span.to(else_kind.span());
+            Ok(Expr::If {
+                test: Box::new(test),
+                block,
+                else_kind,
+                span,
+            })
+        }
+    }
+
+    fn else_kind(&mut self, span: Span<'a, 'b>) -> Result<ElseKind<'a, 'b>, Error<'a, 'b>> {
+        if !self.peek(Else)? {
+            return Ok(ElseKind::Nothing { span: span.after() });
+        }
+
+        let first = self.expect(Else)?;
+        if self.consume(If)? {
+            if self.consume(Let)? {
+                let pattern = self.pattern()?;
+                self.expect(Eq)?;
+                let expr = self.expr(BindingPower::Start)?;
+                let block = self.block()?;
+                let else_kind = self.else_kind(block.span)?;
+
+                let span = first.span.to(else_kind.span());
+                Ok(ElseKind::ElseIfLet {
+                    pattern,
+                    expr: Box::new(expr),
+                    block,
+                    else_kind: Box::new(else_kind),
+                    span,
+                })
+            } else {
+                let test = self.expr(BindingPower::Start)?;
+                let block = self.block()?;
+                let else_kind = self.else_kind(block.span)?;
+
+                let span = first.span.to(else_kind.span());
+                Ok(ElseKind::ElseIf {
+                    test: Box::new(test),
+                    block,
+                    else_kind: Box::new(else_kind),
+                    span,
+                })
+            }
+        } else {
+            let block = self.block()?;
+            let span = first.span.to(block.span);
+            Ok(ElseKind::Else { block, span })
+        }
+    }
+
+    fn while_expr(&mut self) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
+        let first = self.expect(While)?;
+        if self.consume(Let)? {
+            let pattern = self.pattern()?;
+            self.expect(Eq)?;
+            let expr = self.expr(BindingPower::Start)?;
+            let block = self.block()?;
+            let span = first.span.to(block.span);
+            Ok(Expr::WhileLet {
+                pattern,
+                expr: Box::new(expr),
+                block,
+                span,
+            })
+        } else {
+            let test = self.expr(BindingPower::Start)?;
+            let block = self.block()?;
+            let span = first.span.to(block.span);
+            Ok(Expr::While {
+                test: Box::new(test),
+                block,
+                span,
+            })
+        }
+    }
+
+    fn match_expr(&mut self) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
+        let first = self.expect(Match)?;
+        let expr = self.expr(BindingPower::Start)?;
+        self.expect(LBrace)?;
+        if self.peek(RBrace)? {
+            let last = self.expect(RBrace)?;
+            let span = first.span.to(last.span);
+            return Ok(Expr::Match {
+                expr: Box::new(expr),
+                arms: Vec::new(),
+                span,
+            });
+        }
+
+        let mut arms = Vec::new();
+        while !self.peek(RBrace)? {
+            arms.push(self.match_arm()?);
+        }
+        let last = self.expect(RBrace)?;
+
+        let span = first.span.to(last.span);
+        Ok(Expr::Match {
+            expr: Box::new(expr),
+            arms,
+            span,
+        })
+    }
+
+    fn match_arm(&mut self) -> Result<MatchArm<'a, 'b>, Error<'a, 'b>> {
+        let pattern = self.pattern()?;
+        let eq = self.expect(Eq)?;
+        let gt = self.expect(Gt)?;
+        eq.span.by(gt.span)?;
+        let body = self.expr(BindingPower::Start)?;
+        if body.has_block() || self.peek(RBrace)? {
+            self.consume(Comma)?;
+        } else {
+            self.expect(Comma)?;
+        }
+
+        let span = pattern.span().to(body.span());
+        Ok(MatchArm {
+            pattern,
+            body,
+            span,
+        })
+    }
+
+    fn label(&mut self) -> Result<Label<'a, 'b>, Error<'a, 'b>> {
+        let first = self.expect(At)?;
+        let name = self.name()?;
+        let span = first.span.to(name.span);
+        Ok(Label { name, span })
     }
 
     fn extern_block(
@@ -833,8 +1198,10 @@ impl<'a, 'b> Parser<'a, 'b> {
         let last_span = self.expect(RParen)?.span;
 
         let (ret, last_span) = if self.peek(Dash)? {
-            self.expect(Dash)?;
-            self.expect(Gt)?;
+            let dash = self.expect(Dash)?;
+            let gt = self.expect(Gt)?;
+            dash.span.by(gt.span)?;
+
             let ty = self.ty()?;
             let span = ty.span();
             (Some(ty), span)
@@ -916,6 +1283,27 @@ impl<'a, 'b> Parser<'a, 'b> {
         } else if self.peek(LParen)? {
             let (tuple, span) = self.tuple_pattern(false)?;
             Ok(Pattern::Tuple { tuple, span })
+        } else if self.peek(LBrack)? {
+            let first = self.expect(LBrack)?;
+            if self.peek(RBrack)? {
+                let last = self.expect(RBrack)?;
+                let span = first.span.to(last.span);
+                return Ok(Pattern::Array {
+                    array: Vec::new(),
+                    span,
+                });
+            }
+
+            let mut array = vec![self.pattern()?];
+            while !self.peek(RBrack)? && !self.peek([Comma, RBrack])? {
+                self.expect(Comma)?;
+                array.push(self.pattern()?);
+            }
+            self.consume(Comma)?;
+            let last = self.expect(RBrack)?;
+
+            let span = first.span.to(last.span);
+            Ok(Pattern::Array { array, span })
         } else {
             Err(Error::Parse(
                 format!("expected pattern, found {}", self.peek_kind()?.desc()),
@@ -939,7 +1327,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         } else if self.peek(Dot)? {
             let first_dot = self.expect(Dot)?;
             let last_dot = self.expect(Dot)?;
-            let dots = first_dot.span.to(last_dot.span);
+            let dots = first_dot.span.by(last_dot.span)?;
             let last = self.expect(RBrace)?;
             let span = path.span.to(last.span);
             return Ok(Pattern::Struct {
@@ -1103,10 +1491,11 @@ impl<'a, 'b> Parser<'a, 'b> {
             let last = self.expect(RParen)?;
 
             let (ret, last_span) = if self.peek(Dash)? {
-                self.expect(Dash)?;
-                self.expect(Gt)?;
-                let ret = self.ty()?;
+                let dash = self.expect(Dash)?;
+                let gt = self.expect(Gt)?;
+                dash.span.by(gt.span)?;
 
+                let ret = self.ty()?;
                 let span = ret.span();
                 (Some(ret), span)
             } else {
@@ -1219,7 +1608,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         self.expect(Colon)?;
         let ty = self.ty()?;
         self.expect(Eq)?;
-        let expr = self.expr()?;
+        let expr = self.expr(BindingPower::Start)?;
         let last = self.expect(Semi)?;
 
         let span = first_span.to(last.span);
@@ -1232,13 +1621,16 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn static_decl(&mut self, pub_span: Option<Span<'a, 'b>>) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+    fn static_decl(
+        &mut self,
+        pub_span: Option<Span<'a, 'b>>,
+    ) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Static)?;
         let name = self.name()?;
         self.expect(Colon)?;
         let ty = self.ty()?;
         let expr = if self.consume(Eq)? {
-            Some(self.expr()?)
+            Some(self.expr(BindingPower::Start)?)
         } else {
             None
         };
@@ -1324,7 +1716,7 @@ impl Sequence for TokenKind {
             Ident, Under, Int, Float, Char, String, ByteString, Byte, Semi, Comma, Dot, LParen,
             RParen, LBrace, RBrace, LBrack, RBrack, At, Tilde, QMark, Colon, Eq, Bang, Lt, Gt,
             Dash, Plus, Star, Slash, Caret, Percent, Amp, Bar, And, As, Break, Const, Continue,
-            Else, Enum, Extern, Flase, Fn, For, Goto, If, Impl, In, Let, Loop, Match, Mod, Mut,
+            Else, Enum, Extern, False, Fn, For, Goto, If, Impl, In, Let, Loop, Match, Mod, Mut,
             Not, Or, Pub, Return, SelfType, SelfValue, Static, Struct, Trait, Try, True, Type,
             Use, Where, While, Eof,
         }
@@ -1335,4 +1727,11 @@ impl<const N: usize> Sequence for [TokenKind; N] {
     fn as_slice(&self) -> &[TokenKind] {
         self
     }
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum BindingPower {
+    Start,
+    Prefix,
+    Try,
 }
