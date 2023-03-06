@@ -236,6 +236,7 @@ pub struct Signature<'a, 'b> {
     pub generic_params: Option<GenericParams<'a, 'b>>,
     pub self_kind: SelfKind<'a, 'b>,
     pub params: Vec<Param<'a, 'b>>,
+    pub dots: Option<Span<'a, 'b>>,
     pub ret: Option<Ty<'a, 'b>>,
     pub where_clause: Option<WhereClause<'a, 'b>>,
     pub span: Span<'a, 'b>,

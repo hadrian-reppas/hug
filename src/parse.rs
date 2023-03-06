@@ -1688,7 +1688,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             SelfKind::None
         };
 
-        let params = self.params(!self_kind.is_none())?;
+        let (params, dots) = self.params(!self_kind.is_none())?;
         let last_span = self.expect(RParen)?.span;
 
         let (ret, last_span) = if self.peek(Dash)? {
@@ -1717,13 +1717,17 @@ impl<'a, 'b> Parser<'a, 'b> {
             generic_params,
             self_kind,
             params,
+            dots,
             ret,
             where_clause,
             span,
         })
     }
 
-    fn params(&mut self, has_self_param: bool) -> Result<Vec<Param<'a, 'b>>, Error<'a, 'b>> {
+    fn params(
+        &mut self,
+        has_self_param: bool,
+    ) -> Result<(Vec<Param<'a, 'b>>, Option<Span<'a, 'b>>), Error<'a, 'b>> {
         if has_self_param && !self.peek(RParen)? {
             self.expect(Comma)?;
         }
@@ -1736,7 +1740,13 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
 
         if self.peek(RParen)? {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), None));
+        } else if self.peek(Dot)? {
+            let first = self.expect(Dot)?;
+            let second = self.expect(Dot)?;
+            let last = self.expect(Dot)?;
+            let span = first.span.by(second.span)?.by(last.span)?;
+            return Ok((Vec::new(), Some(span)));
         }
 
         let pattern = self.pattern()?;
@@ -1747,6 +1757,15 @@ impl<'a, 'b> Parser<'a, 'b> {
         let mut params = vec![Param { pattern, ty, span }];
         while !self.peek(RParen)? && !self.peek([Comma, RParen])? {
             self.expect(Comma)?;
+
+            if self.peek(Dot)? {
+                let first = self.expect(Dot)?;
+                let second = self.expect(Dot)?;
+                let last = self.expect(Dot)?;
+                let span = first.span.by(second.span)?.by(last.span)?;
+                return Ok((params, Some(span)));
+            }
+
             let pattern = self.pattern()?;
             self.expect(Colon)?;
             let ty = self.ty()?;
@@ -1755,7 +1774,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
         self.consume(Comma)?;
 
-        Ok(params)
+        Ok((params, None))
     }
 
     fn pattern(&mut self) -> Result<Pattern<'a, 'b>, Error<'a, 'b>> {
