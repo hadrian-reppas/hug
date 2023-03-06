@@ -24,11 +24,11 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     fn next(&mut self) -> Result<Token<'a, 'b>, Error<'a, 'b>> {
-        dbg!(if let Some(token) = self.peek.pop_front() {
+        if let Some(token) = self.peek.pop_front() {
             Ok(token)
         } else {
             self.tokens.next()
-        })
+        }
     }
 
     fn expect(&mut self, expected: TokenKind) -> Result<Token<'a, 'b>, Error<'a, 'b>> {
@@ -652,7 +652,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                     self.expect(Semi)?;
                 }
                 _ => {
-                    let expr = self.expr(BindingPower::Start)?;
+                    let expr = self.expr(BindingPower::Start, true)?;
                     if self.peek(Semi)? {
                         let last = self.expect(Semi)?;
                         let span = expr.span().to(last.span);
@@ -704,7 +704,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         };
 
         let expr = if self.consume(Eq)? {
-            Some(self.expr(BindingPower::Start)?)
+            Some(self.expr(BindingPower::Start, true)?)
         } else {
             None
         };
@@ -719,7 +719,11 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn expr(&mut self, bp: BindingPower) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
+    fn expr(
+        &mut self,
+        bp: BindingPower,
+        allow_struct: bool,
+    ) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
         macro_rules! literal {
             ($token:ident, $kind:ident) => {{
                 let span = self.expect($token)?.span;
@@ -731,9 +735,9 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
 
         macro_rules! uop {
-            ($token:ident, $kind:ident, $bp:expr) => {{
+            ($token:ident, $kind:ident, $bp:ident) => {{
                 let op_span = self.expect($token)?.span;
-                let expr = self.expr($bp)?;
+                let expr = self.expr(BindingPower::$bp, allow_struct)?;
                 let span = op_span.to(expr.span());
                 Expr::Unary {
                     op: UnOp::$kind,
@@ -754,13 +758,13 @@ impl<'a, 'b> Parser<'a, 'b> {
             True => literal!(True, Bool),
             False => literal!(False, Bool),
 
-            Dash => uop!(Dash, Neg, BindingPower::Start),
-            Bang => uop!(Bang, Not, BindingPower::Start),
-            Not => uop!(Not, LogicalNot, BindingPower::Start),
-            Star => uop!(Star, Deref, BindingPower::Start),
-            Amp => uop!(Amp, AddrOf, BindingPower::Start),
+            Dash => uop!(Dash, Neg, Prefix),
+            Bang => uop!(Bang, Not, Prefix),
+            Not => uop!(Not, LogicalNot, Prefix),
+            Star => uop!(Star, Deref, Prefix),
+            Amp => uop!(Amp, AddrOf, Prefix),
 
-            Ident => self.ident_expr()?,
+            Ident => self.ident_expr(allow_struct)?,
             SelfValue => Expr::SelfValue {
                 span: self.expect(SelfValue)?.span,
             },
@@ -780,7 +784,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                 let first = self.expect(For)?;
                 let pattern = self.pattern()?;
                 self.expect(In)?;
-                let iter = self.expr(BindingPower::Start)?;
+                let iter = self.expr(BindingPower::Start, false)?;
                 let block = self.block()?;
                 let span = first.span.to(block.span);
                 Expr::For {
@@ -806,7 +810,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                 let first = self.expect(Goto)?;
                 let label = self.label()?;
                 if self.peek_kind()?.is_expr_start() {
-                    let expr = self.expr(BindingPower::Start)?;
+                    let expr = self.expr(BindingPower::Start, allow_struct)?;
                     let span = first.span.to(expr.span());
                     Expr::Goto {
                         label,
@@ -824,7 +828,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             Break => {
                 let first = self.expect(Break)?;
                 if self.peek_kind()?.is_expr_start() {
-                    let expr = self.expr(BindingPower::Start)?;
+                    let expr = self.expr(BindingPower::Start, allow_struct)?;
                     let span = first.span.to(expr.span());
                     Expr::Break {
                         expr: Some(Box::new(expr)),
@@ -844,7 +848,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             Return => {
                 let first = self.expect(Return)?;
                 if self.peek_kind()?.is_expr_start() {
-                    let expr = self.expr(BindingPower::Start)?;
+                    let expr = self.expr(BindingPower::Start, allow_struct)?;
                     let span = first.span.to(expr.span());
                     Expr::Return {
                         expr: Some(Box::new(expr)),
@@ -875,7 +879,14 @@ impl<'a, 'b> Parser<'a, 'b> {
                 };
 
                 if self.peek_kind()?.is_expr_start() {
-                    let high = self.expr(BindingPower::Range)?;
+                    let high = self.expr(BindingPower::Range, allow_struct)?;
+                    if high.is_range() {
+                        return Err(Error::Parse(
+                            "range bounds cannot be ranges".to_string(),
+                            high.span(),
+                            vec![Note::new("consider adding parentheses".to_string(), None)],
+                        ));
+                    }
                     let span = range_span.to(high.span());
                     Expr::Range {
                         low: None,
@@ -904,9 +915,23 @@ impl<'a, 'b> Parser<'a, 'b> {
 
         while let Some(op_info) = self.next_op(bp)? {
             lhs = match op_info {
-                OpInfo::BinOp { op, op_span, bp } => {
-                    let rhs = self.expr(bp)?;
+                OpInfo::BinOp {
+                    op,
+                    op_span,
+                    bp,
+                    is_cmp,
+                } => {
+                    let rhs = self.expr(bp, allow_struct)?;
                     let span = lhs.span().to(rhs.span());
+
+                    if is_cmp && (lhs.is_cmp() || rhs.is_cmp()) {
+                        return Err(Error::Parse(
+                            "comparison operators cannot be chained".to_string(),
+                            span,
+                            vec![Note::new("consider adding parentheses".to_string(), None)],
+                        ));
+                    }
+
                     Expr::Binary {
                         op,
                         lhs: Box::new(lhs),
@@ -916,7 +941,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                     }
                 }
                 OpInfo::AssignOp { op, op_span } => {
-                    let rhs = self.expr(BindingPower::Assign)?;
+                    let rhs = self.expr(BindingPower::Assign, allow_struct)?;
                     let span = lhs.span().to(rhs.span());
                     Expr::AssignOp {
                         op,
@@ -927,7 +952,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                     }
                 }
                 OpInfo::Assign => {
-                    let rhs = self.expr(BindingPower::Assign)?;
+                    let rhs = self.expr(BindingPower::Assign, allow_struct)?;
                     let span = lhs.span().to(rhs.span());
                     Expr::Assign {
                         target: Box::new(lhs),
@@ -936,6 +961,14 @@ impl<'a, 'b> Parser<'a, 'b> {
                     }
                 }
                 OpInfo::Call => {
+                    if lhs.is_cast() {
+                        return Err(Error::Parse(
+                            "cast cannot be followed by a call".to_string(),
+                            lhs.span(),
+                            vec![Note::new("consider adding parentheses".to_string(), None)],
+                        ));
+                    }
+
                     if self.peek(RParen)? {
                         let last = self.expect(RParen)?;
                         let span = lhs.span().to(last.span);
@@ -945,10 +978,10 @@ impl<'a, 'b> Parser<'a, 'b> {
                             span,
                         }
                     } else {
-                        let mut args = vec![self.expr(BindingPower::Start)?];
+                        let mut args = vec![self.expr(BindingPower::Start, true)?];
                         while !self.peek(RParen)? && !self.peek([Comma, RParen])? {
                             self.expect(Comma)?;
-                            args.push(self.expr(BindingPower::Start)?);
+                            args.push(self.expr(BindingPower::Start, true)?);
                         }
                         self.consume(Comma)?;
                         let last = self.expect(RParen)?;
@@ -961,6 +994,14 @@ impl<'a, 'b> Parser<'a, 'b> {
                     }
                 }
                 OpInfo::MethodCall => {
+                    if lhs.is_cast() {
+                        return Err(Error::Parse(
+                            "cast cannot be followed by a method call".to_string(),
+                            lhs.span(),
+                            vec![Note::new("consider adding parentheses".to_string(), None)],
+                        ));
+                    }
+
                     let name = self.generic_segment()?;
                     self.expect(LParen)?;
                     if self.peek(RParen)? {
@@ -973,10 +1014,10 @@ impl<'a, 'b> Parser<'a, 'b> {
                             span,
                         }
                     } else {
-                        let mut args = vec![self.expr(BindingPower::Start)?];
+                        let mut args = vec![self.expr(BindingPower::Start, true)?];
                         while !self.peek(RParen)? && !self.peek([Comma, RParen])? {
                             self.expect(Comma)?;
-                            args.push(self.expr(BindingPower::Start)?);
+                            args.push(self.expr(BindingPower::Start, true)?);
                         }
                         self.consume(Comma)?;
                         let last = self.expect(RParen)?;
@@ -990,7 +1031,15 @@ impl<'a, 'b> Parser<'a, 'b> {
                     }
                 }
                 OpInfo::Index => {
-                    let index = self.expr(BindingPower::Start)?;
+                    if lhs.is_cast() {
+                        return Err(Error::Parse(
+                            "cast cannot be followed by indexing".to_string(),
+                            lhs.span(),
+                            vec![Note::new("consider adding parentheses".to_string(), None)],
+                        ));
+                    }
+
+                    let index = self.expr(BindingPower::Start, true)?;
                     let last = self.expect(RBrack)?;
                     let span = lhs.span().to(last.span);
                     Expr::Index {
@@ -1000,6 +1049,14 @@ impl<'a, 'b> Parser<'a, 'b> {
                     }
                 }
                 OpInfo::Field => {
+                    if lhs.is_cast() {
+                        return Err(Error::Parse(
+                            "cast cannot be followed by a field access".to_string(),
+                            lhs.span(),
+                            vec![Note::new("consider adding parentheses".to_string(), None)],
+                        ));
+                    }
+
                     let name = self.name()?;
                     let span = lhs.span().to(name.span);
                     Expr::Field {
@@ -1018,8 +1075,23 @@ impl<'a, 'b> Parser<'a, 'b> {
                     }
                 }
                 OpInfo::Range { range_span } => {
+                    if lhs.is_range() {
+                        return Err(Error::Parse(
+                            "range bounds cannot be ranges".to_string(),
+                            lhs.span(),
+                            vec![Note::new("consider adding parentheses".to_string(), None)],
+                        ));
+                    }
+
                     let (high, span) = if self.peek_kind()?.is_expr_start() {
-                        let high = self.expr(BindingPower::Range)?;
+                        let high = self.expr(BindingPower::Range, allow_struct)?;
+                        if high.is_range() {
+                            return Err(Error::Parse(
+                                "range bounds cannot be ranges".to_string(),
+                                high.span(),
+                                vec![Note::new("consider adding parentheses".to_string(), None)],
+                            ));
+                        }
                         let span = lhs.span().to(high.span());
                         (Some(Box::new(high)), span)
                     } else {
@@ -1033,17 +1105,15 @@ impl<'a, 'b> Parser<'a, 'b> {
                         span,
                     }
                 }
+                OpInfo::Try { qmark_span } => {
+                    let span = lhs.span().to(qmark_span);
+                    Expr::Try {
+                        expr: Box::new(lhs),
+                        qmark_span,
+                        span,
+                    }
+                }
             };
-        }
-
-        while self.peek(QMark)? {
-            let qmark_span = self.expect(QMark)?.span;
-            let span = lhs.span().to(qmark_span);
-            lhs = Expr::Try {
-                expr: Box::new(lhs),
-                qmark_span,
-                span,
-            }
         }
 
         Ok(lhs)
@@ -1092,6 +1162,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                     op: BinOp::$op,
                     op_span,
                     bp: BindingPower::$bp,
+                    is_cmp: BindingPower::$bp == BindingPower::Cmp,
                 }))
             }};
 
@@ -1108,11 +1179,10 @@ impl<'a, 'b> Parser<'a, 'b> {
                     op: BinOp::$op,
                     op_span,
                     bp: BindingPower::$bp,
+                    is_cmp: BindingPower::$bp == BindingPower::Cmp,
                 }))
             }};
         }
-
-        println!("HERE: {:?}", self.peek_kind());
 
         if self.peek([Plus, Eq])? {
             assign_op!(Plus, Eq => Add)
@@ -1173,6 +1243,9 @@ impl<'a, 'b> Parser<'a, 'b> {
         } else if self.peek(Eq)? {
             self.expect(Eq)?;
             Ok(Some(OpInfo::Assign))
+        } else if self.peek(QMark)? {
+            let qmark_span = self.expect(QMark)?.span;
+            Ok(Some(OpInfo::Try { qmark_span }))
         } else if self.peek(As)? {
             self.expect(As)?;
             Ok(Some(OpInfo::Cast))
@@ -1216,7 +1289,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             });
         }
 
-        let expr = self.expr(BindingPower::Start)?;
+        let expr = self.expr(BindingPower::Start, true)?;
         if self.peek(RParen)? {
             let last = self.expect(RParen)?;
             let span = first.span.to(last.span);
@@ -1229,7 +1302,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         let mut exprs = vec![expr];
         while !self.peek(RParen)? && !self.peek([Comma, RParen])? {
             self.expect(Comma)?;
-            exprs.push(self.expr(BindingPower::Start)?);
+            exprs.push(self.expr(BindingPower::Start, true)?);
         }
         self.consume(Comma)?;
         let last = self.expect(RParen)?;
@@ -1249,7 +1322,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             });
         }
 
-        let expr = self.expr(BindingPower::Start)?;
+        let expr = self.expr(BindingPower::Start, true)?;
         if self.consume(Semi)? {
             let count = self.expect(Int)?.span;
             let last = self.expect(RBrack)?;
@@ -1264,7 +1337,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         let mut exprs = vec![expr];
         while !self.peek(RBrack)? && !self.peek([Comma, RBrack])? {
             self.expect(Comma)?;
-            exprs.push(self.expr(BindingPower::Start)?);
+            exprs.push(self.expr(BindingPower::Start, true)?);
         }
         self.consume(Comma)?;
         let last = self.expect(RBrack)?;
@@ -1273,9 +1346,9 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(Expr::Array { exprs, span })
     }
 
-    fn ident_expr(&mut self) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
+    fn ident_expr(&mut self, allow_struct: bool) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
         let path = self.generic_path()?;
-        if self.consume(LBrace)? {
+        if allow_struct && self.consume(LBrace)? {
             if self.peek(RBrace)? {
                 let last = self.expect(RBrace)?;
                 let span = path.span.to(last.span);
@@ -1342,7 +1415,7 @@ impl<'a, 'b> Parser<'a, 'b> {
     fn expr_field(&mut self) -> Result<ExprField<'a, 'b>, Error<'a, 'b>> {
         let name = self.name()?;
         if self.consume(Colon)? {
-            let expr = self.expr(BindingPower::Start)?;
+            let expr = self.expr(BindingPower::Start, true)?;
             let span = name.span.to(expr.span());
             Ok(ExprField::Expr { name, expr, span })
         } else {
@@ -1356,7 +1429,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         if self.consume(Let)? {
             let pattern = self.pattern()?;
             self.expect(Eq)?;
-            let expr = self.expr(BindingPower::Start)?;
+            let expr = self.expr(BindingPower::Start, false)?;
             let block = self.block()?;
             let else_kind = self.else_kind(block.span)?;
 
@@ -1369,7 +1442,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                 span,
             })
         } else {
-            let test = self.expr(BindingPower::Start)?;
+            let test = self.expr(BindingPower::Start, false)?;
             let block = self.block()?;
             let else_kind = self.else_kind(block.span)?;
 
@@ -1393,7 +1466,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             if self.consume(Let)? {
                 let pattern = self.pattern()?;
                 self.expect(Eq)?;
-                let expr = self.expr(BindingPower::Start)?;
+                let expr = self.expr(BindingPower::Start, false)?;
                 let block = self.block()?;
                 let else_kind = self.else_kind(block.span)?;
 
@@ -1406,7 +1479,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                     span,
                 })
             } else {
-                let test = self.expr(BindingPower::Start)?;
+                let test = self.expr(BindingPower::Start, false)?;
                 let block = self.block()?;
                 let else_kind = self.else_kind(block.span)?;
 
@@ -1430,7 +1503,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         if self.consume(Let)? {
             let pattern = self.pattern()?;
             self.expect(Eq)?;
-            let expr = self.expr(BindingPower::Start)?;
+            let expr = self.expr(BindingPower::Start, false)?;
             let block = self.block()?;
             let span = first.span.to(block.span);
             Ok(Expr::WhileLet {
@@ -1440,7 +1513,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                 span,
             })
         } else {
-            let test = self.expr(BindingPower::Start)?;
+            let test = self.expr(BindingPower::Start, false)?;
             let block = self.block()?;
             let span = first.span.to(block.span);
             Ok(Expr::While {
@@ -1453,7 +1526,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
     fn match_expr(&mut self) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
         let first = self.expect(Match)?;
-        let expr = self.expr(BindingPower::Start)?;
+        let expr = self.expr(BindingPower::Start, false)?;
         self.expect(LBrace)?;
         if self.peek(RBrace)? {
             let last = self.expect(RBrace)?;
@@ -1484,8 +1557,8 @@ impl<'a, 'b> Parser<'a, 'b> {
         let eq = self.expect(Eq)?;
         let gt = self.expect(Gt)?;
         eq.span.by(gt.span)?;
-        let body = self.expr(BindingPower::Start)?;
-        if body.has_block() || self.peek(RBrace)? {
+        let body = self.expr(BindingPower::Start, true)?;
+        if self.peek(RBrace)? {
             self.consume(Comma)?;
         } else {
             self.expect(Comma)?;
@@ -2029,7 +2102,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         self.expect(Colon)?;
         let ty = self.ty()?;
         self.expect(Eq)?;
-        let expr = self.expr(BindingPower::Start)?;
+        let expr = self.expr(BindingPower::Start, true)?;
         let last = self.expect(Semi)?;
 
         let span = first_span.to(last.span);
@@ -2051,7 +2124,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         self.expect(Colon)?;
         let ty = self.ty()?;
         let expr = if self.consume(Eq)? {
-            Some(self.expr(BindingPower::Start)?)
+            Some(self.expr(BindingPower::Start, true)?)
         } else {
             None
         };
@@ -2164,7 +2237,7 @@ enum BindingPower {
     Shift,
     Sum,
     Prod,
-    Cast,
+    Prefix,
 }
 
 enum OpInfo<'a, 'b> {
@@ -2172,6 +2245,7 @@ enum OpInfo<'a, 'b> {
         op: BinOp,
         op_span: Span<'a, 'b>,
         bp: BindingPower,
+        is_cmp: bool,
     },
     AssignOp {
         op: AssignOp,
@@ -2185,5 +2259,8 @@ enum OpInfo<'a, 'b> {
     Cast,
     Range {
         range_span: Span<'a, 'b>,
+    },
+    Try {
+        qmark_span: Span<'a, 'b>,
     },
 }

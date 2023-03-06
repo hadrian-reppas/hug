@@ -4,7 +4,7 @@ mod lex;
 mod parse;
 mod span;
 
-const FILE_PATH: &str = "test/main.hug";
+const FILE_PATH: &str = "test/vec.hug";
 
 fn main() {
     let code = std::fs::read_to_string(FILE_PATH).unwrap();

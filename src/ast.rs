@@ -192,12 +192,14 @@ pub struct StructField<'a, 'b> {
     pub ty: Ty<'a, 'b>,
     pub span: Span<'a, 'b>,
 }
+
 #[derive(Debug)]
 pub struct EnumItem<'a, 'b> {
     pub name: Name<'a, 'b>,
     pub tuple: Option<Vec<Ty<'a, 'b>>>,
     pub span: Span<'a, 'b>,
 }
+
 #[derive(Debug)]
 pub enum ExternItem<'a, 'b> {
     Fn {
@@ -227,6 +229,7 @@ impl<'a, 'b> ExternItem<'a, 'b> {
         }
     }
 }
+
 #[derive(Debug)]
 pub struct Signature<'a, 'b> {
     pub name: Name<'a, 'b>,
@@ -237,11 +240,13 @@ pub struct Signature<'a, 'b> {
     pub where_clause: Option<WhereClause<'a, 'b>>,
     pub span: Span<'a, 'b>,
 }
+
 #[derive(Debug)]
 pub struct GenericParams<'a, 'b> {
     pub params: Vec<Name<'a, 'b>>,
     pub span: Span<'a, 'b>,
 }
+
 #[derive(Debug)]
 pub enum SelfKind<'a, 'b> {
     Ptr(Span<'a, 'b>),
@@ -261,17 +266,20 @@ impl<'a, 'b> SelfKind<'a, 'b> {
         matches!(self, SelfKind::None)
     }
 }
+
 #[derive(Debug)]
 pub struct Param<'a, 'b> {
     pub pattern: Pattern<'a, 'b>,
     pub ty: Ty<'a, 'b>,
     pub span: Span<'a, 'b>,
 }
+
 #[derive(Debug)]
 pub struct WhereClause<'a, 'b> {
     pub items: Vec<WhereItem<'a, 'b>>,
     pub span: Span<'a, 'b>,
 }
+
 #[derive(Debug)]
 pub enum WhereItem<'a, 'b> {
     Bound {
@@ -293,6 +301,7 @@ impl<'a, 'b> WhereItem<'a, 'b> {
         }
     }
 }
+
 #[derive(Debug)]
 pub enum TraitBound<'a, 'b> {
     Trait {
@@ -315,6 +324,7 @@ impl<'a, 'b> TraitBound<'a, 'b> {
         }
     }
 }
+
 #[derive(Debug)]
 pub enum TraitItem<'a, 'b> {
     Required {
@@ -335,6 +345,7 @@ impl<'a, 'b> TraitItem<'a, 'b> {
         }
     }
 }
+
 #[derive(Debug)]
 pub struct Block<'a, 'b> {
     pub stmts: Vec<Stmt<'a, 'b>>,
@@ -367,6 +378,7 @@ impl<'a, 'b> Stmt<'a, 'b> {
         }
     }
 }
+
 #[derive(Debug)]
 pub enum Expr<'a, 'b> {
     Array {
@@ -590,19 +602,35 @@ impl<'a, 'b> Expr<'a, 'b> {
     pub fn is_range(&self) -> bool {
         matches!(self, Expr::Range { .. })
     }
-}
-#[derive(Debug)]
 
+    pub fn is_cast(&self) -> bool {
+        matches!(self, Expr::Cast { .. })
+    }
+
+    pub fn is_cmp(&self) -> bool {
+        matches!(
+            self,
+            Expr::Binary {
+                op: BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge,
+                ..
+            }
+        )
+    }
+}
+
+#[derive(Debug)]
 pub struct GenericPath<'a, 'b> {
     pub segments: Vec<GenericSegment<'a, 'b>>,
     pub span: Span<'a, 'b>,
 }
+
 #[derive(Debug)]
 pub struct GenericSegment<'a, 'b> {
     pub name: Name<'a, 'b>,
     pub generic_args: Option<GenericArgs<'a, 'b>>,
     pub span: Span<'a, 'b>,
 }
+
 #[derive(Debug)]
 pub struct MatchArm<'a, 'b> {
     pub pattern: Pattern<'a, 'b>,
@@ -671,8 +699,8 @@ pub struct Label<'a, 'b> {
     pub name: Name<'a, 'b>,
     pub span: Span<'a, 'b>,
 }
-#[derive(Debug)]
 
+#[derive(Debug)]
 pub enum ElseKind<'a, 'b> {
     Else {
         block: Block<'a, 'b>,
@@ -706,6 +734,7 @@ impl<'a, 'b> ElseKind<'a, 'b> {
         }
     }
 }
+
 #[derive(Debug)]
 pub enum ExprField<'a, 'b> {
     Name {
@@ -726,6 +755,7 @@ impl<'a, 'b> ExprField<'a, 'b> {
         }
     }
 }
+
 #[derive(Debug)]
 pub enum Pattern<'a, 'b> {
     Wild {
@@ -768,6 +798,7 @@ impl<'a, 'b> Pattern<'a, 'b> {
         }
     }
 }
+
 #[derive(Debug)]
 pub struct FieldPattern<'a, 'b> {
     pub name: Name<'a, 'b>,

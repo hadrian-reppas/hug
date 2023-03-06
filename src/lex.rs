@@ -650,6 +650,7 @@ impl TokenKind {
                 | TokenKind::Dash
                 | TokenKind::Bang
                 | TokenKind::Not
+                | TokenKind::Star
                 | TokenKind::Amp
                 | TokenKind::Dot
                 | TokenKind::Ident
@@ -667,6 +668,7 @@ impl TokenKind {
                 | TokenKind::Continue
                 | TokenKind::Return
                 | TokenKind::SelfValue
+                | TokenKind::At
         )
     }
 }
