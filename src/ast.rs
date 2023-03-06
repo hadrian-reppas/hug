@@ -715,7 +715,7 @@ pub enum Expr<'a, 'b> {
     },
     MethodCall {
         receiver: Box<Expr<'a, 'b>>,
-        path: GenericPath<'a, 'b>,
+        name: GenericSegment<'a, 'b>,
         args: Vec<Expr<'a, 'b>>,
         span: Span<'a, 'b>,
     },
@@ -738,6 +738,9 @@ pub enum Expr<'a, 'b> {
     },
     Literal {
         kind: LiteralKind,
+        span: Span<'a, 'b>,
+    },
+    SelfValue {
         span: Span<'a, 'b>,
     },
     Cast {
@@ -859,6 +862,10 @@ pub enum Expr<'a, 'b> {
         count: Span<'a, 'b>,
         span: Span<'a, 'b>,
     },
+    Paren {
+        expr: Box<Expr<'a, 'b>>,
+        span: Span<'a, 'b>,
+    },
 }
 
 impl<'a, 'b> Expr<'a, 'b> {
@@ -871,6 +878,7 @@ impl<'a, 'b> Expr<'a, 'b> {
             | Expr::Binary { span, .. }
             | Expr::Unary { span, .. }
             | Expr::Literal { span, .. }
+            | Expr::SelfValue { span, .. }
             | Expr::Cast { span, .. }
             | Expr::If { span, .. }
             | Expr::IfLet { span, .. }
@@ -894,7 +902,8 @@ impl<'a, 'b> Expr<'a, 'b> {
             | Expr::Continue { span, .. }
             | Expr::Return { span, .. }
             | Expr::Struct { span, .. }
-            | Expr::Repeat { span, .. } => *span,
+            | Expr::Repeat { span, .. }
+            | Expr::Paren { span, .. } => *span,
         }
     }
 
@@ -912,6 +921,10 @@ impl<'a, 'b> Expr<'a, 'b> {
                 | Expr::TryBlock { .. }
         )
     }
+
+    pub fn is_range(&self) -> bool {
+        matches!(self, Expr::Range { .. })
+    }
 }
 
 impl Debug for Expr<'_, '_> {
@@ -925,13 +938,13 @@ impl Debug for Expr<'_, '_> {
                 .finish(),
             Expr::MethodCall {
                 receiver,
-                path,
+                name,
                 args,
                 ..
             } => f
                 .debug_struct("MethodCall")
                 .field("receiver", receiver)
-                .field("path", path)
+                .field("name", name)
                 .field("args", args)
                 .finish(),
             Expr::Tuple { exprs, .. } => f.debug_tuple("Tuple").field(exprs).finish(),
@@ -951,6 +964,7 @@ impl Debug for Expr<'_, '_> {
                 .field("kind", kind)
                 .field("span", span)
                 .finish(),
+            Expr::SelfValue { .. } => f.debug_tuple("SelfValue").finish(),
             Expr::Cast { expr, ty, .. } => f
                 .debug_struct("Cast")
                 .field("expr", expr)
@@ -1064,12 +1078,13 @@ impl Debug for Expr<'_, '_> {
                 .field("expr", expr)
                 .field("count", count)
                 .finish(),
+            Expr::Paren { expr, .. } => f.debug_tuple("Paren").field(expr).finish(),
         }
     }
 }
 
 pub struct GenericPath<'a, 'b> {
-    pub segments: GenericSegment<'a, 'b>,
+    pub segments: Vec<GenericSegment<'a, 'b>>,
     pub span: Span<'a, 'b>,
 }
 
@@ -1121,18 +1136,49 @@ pub enum LiteralKind {
 }
 
 #[derive(Debug)]
-pub enum BinOp {}
+pub enum BinOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Rem,
+    And,
+    Or,
+    Xor,
+    Shl,
+    Shr,
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    LogicalAnd,
+    LogicalOr,
+}
 
 #[derive(Debug)]
 pub enum UnOp {
     Deref,
     Not,
+    LogicalNot,
     Neg,
     AddrOf,
 }
 
 #[derive(Debug)]
-pub enum AssignOp {}
+pub enum AssignOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Rem,
+    And,
+    Or,
+    Xor,
+    Shl,
+    Shr,
+}
 
 pub struct Label<'a, 'b> {
     pub name: Name<'a, 'b>,

@@ -90,3 +90,75 @@ fn match_expr() {
         _ => false,
     }
 }
+
+fn goto_expr() {
+    @start;
+    goto @end true;
+    goto @end;
+    let x = @end;
+}
+
+fn struct_expr() {
+    let x = path::to::Struct::<u32, Vec<bool>> {
+        value,
+        count: [""; 6],
+        total: local::thing,
+    };
+}
+
+fn generic_path() {
+    let path1 = path::to::Thing;
+    let path2 = path::to::Generic::<u8, ()>;
+    let path3 = path::To::<u32>::func::<T, U>;
+}
+
+fn try_expr() -> Option<u8> {
+    let x = x?;
+    let y = -y?;
+    let z = (-z)?;
+    let w = w??;
+}
+
+fn range_to() {
+    let x = ..1;
+    let y = ..;
+    let x = ..=2;
+    let y = ..=;
+}
+
+fn assign_op() {
+    let x = x += 1;
+    let x = x += x -= 1;
+    let x = (x >>= 1) <<= 1;
+}
+
+fn arith() {
+    let x = 1 + 2 + 3;
+    let x = 1 + 2 * 3;
+    let x = 1 * 2 + 3;
+    let x = 1 + 2 += x += 1 + 2;
+}
+
+fn call() {
+    f();
+    f(x,);
+    f(x, y);
+    f(x, y, z);
+    1 + f(x);
+    (1 + 2)(4);
+    ..f();
+
+    v as Vec<T>
+}
+
+fn ranges() {
+    1..2;
+    ..2;
+    1..;
+    ..
+}
+
+fn ranges() {
+    1..2..3;
+    1..self.len();
+}

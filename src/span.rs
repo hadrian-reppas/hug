@@ -111,7 +111,7 @@ impl<'a, 'b> Span<'a, 'b> {
                 .unwrap(),
         );
 
-        let last_line_num = format!("{}", self.location.line + lines.len() + 1);
+        let last_line_num = format!("{}", self.location.line + lines.len());
         let num_width = last_line_num.len();
         let space = " ".repeat(num_width);
         let last_len = lines.last().unwrap().1.len();
@@ -295,11 +295,7 @@ fn count_leading_spaces(s: &str) -> usize {
 
 impl Debug for Span<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Span")
-            .field("text", &self.text)
-            .field("line", &self.location.line)
-            .field("column", &self.location.column)
-            .finish()
+        write!(f, "Span({:?})", self.text)
     }
 }
 

@@ -228,7 +228,7 @@ impl<'a, 'b> Tokens<'a, 'b> {
     fn lex_number(&mut self) -> Result<Token<'a, 'b>, Error<'a, 'b>> {
         lazy_static! {
             static ref NUMBER: Regex = Regex::new(
-                r"\A-?((\d*\.\d+)|(\d+\.?))([Ee][+-]?\d+)?(_?\p{Alphabetic}[\p{Alphabetic}0-9]*)?"
+                r"\A-?\d+(\.\d+)?([Ee][+-]?\d+)?(_?\p{Alphabetic}[\p{Alphabetic}0-9]*)?"
             )
             .unwrap();
             static ref SUFFIX: Regex = Regex::new(r"\p{Alphabetic}[\p{Alphabetic}0-9]*\z").unwrap();
@@ -651,6 +651,7 @@ impl TokenKind {
                 | TokenKind::Bang
                 | TokenKind::Not
                 | TokenKind::Amp
+                | TokenKind::Dot
                 | TokenKind::Ident
                 | TokenKind::LParen
                 | TokenKind::LBrack
@@ -665,18 +666,7 @@ impl TokenKind {
                 | TokenKind::Break
                 | TokenKind::Continue
                 | TokenKind::Return
-        )
-    }
-
-    pub fn is_expr_end(self) -> bool {
-        matches!(
-            self,
-            TokenKind::Semi
-                | TokenKind::Comma
-                | TokenKind::LBrace
-                | TokenKind::RParen
-                | TokenKind::RBrace
-                | TokenKind::RBrack
+                | TokenKind::SelfValue
         )
     }
 }

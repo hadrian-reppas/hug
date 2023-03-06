@@ -24,11 +24,11 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     fn next(&mut self) -> Result<Token<'a, 'b>, Error<'a, 'b>> {
-        if let Some(token) = self.peek.pop_front() {
+        dbg!(if let Some(token) = self.peek.pop_front() {
             Ok(token)
         } else {
             self.tokens.next()
-        }
+        })
     }
 
     fn expect(&mut self, expected: TokenKind) -> Result<Token<'a, 'b>, Error<'a, 'b>> {
@@ -754,13 +754,16 @@ impl<'a, 'b> Parser<'a, 'b> {
             True => literal!(True, Bool),
             False => literal!(False, Bool),
 
-            Dash => uop!(Dash, Neg, BindingPower::Prefix),
-            Bang => uop!(Bang, Not, BindingPower::Prefix),
-            Not => uop!(Not, Not, BindingPower::Prefix),
-            Star => uop!(Star, Deref, BindingPower::Prefix),
-            Amp => uop!(Amp, AddrOf, BindingPower::Prefix),
+            Dash => uop!(Dash, Neg, BindingPower::Start),
+            Bang => uop!(Bang, Not, BindingPower::Start),
+            Not => uop!(Not, LogicalNot, BindingPower::Start),
+            Star => uop!(Star, Deref, BindingPower::Start),
+            Amp => uop!(Amp, AddrOf, BindingPower::Start),
 
             Ident => self.ident_expr()?,
+            SelfValue => Expr::SelfValue {
+                span: self.expect(SelfValue)?.span,
+            },
 
             LParen => self.paren_expr()?,
             LBrack => self.brack_expr()?,
@@ -860,6 +863,36 @@ impl<'a, 'b> Parser<'a, 'b> {
                 Expr::Label { label, span }
             }
 
+            Dot => {
+                let first_span = self.expect(Dot)?.span;
+                let second_span = self.expect(Dot)?.span;
+
+                let range_span = if self.peek(Eq)? {
+                    let last_span = self.expect(Eq)?.span;
+                    first_span.by(second_span)?.by(last_span)?
+                } else {
+                    first_span.by(second_span)?
+                };
+
+                if self.peek_kind()?.is_expr_start() {
+                    let high = self.expr(BindingPower::Range)?;
+                    let span = range_span.to(high.span());
+                    Expr::Range {
+                        low: None,
+                        high: Some(Box::new(high)),
+                        range_span,
+                        span,
+                    }
+                } else {
+                    Expr::Range {
+                        low: None,
+                        high: None,
+                        range_span,
+                        span: range_span,
+                    }
+                }
+            }
+
             kind => {
                 return Err(Error::Parse(
                     format!("expected expression, found {}", kind.desc()),
@@ -869,9 +902,307 @@ impl<'a, 'b> Parser<'a, 'b> {
             }
         };
 
-        // TODO: loop {}
+        while let Some(op_info) = self.next_op(bp)? {
+            lhs = match op_info {
+                OpInfo::BinOp { op, op_span, bp } => {
+                    let rhs = self.expr(bp)?;
+                    let span = lhs.span().to(rhs.span());
+                    Expr::Binary {
+                        op,
+                        lhs: Box::new(lhs),
+                        rhs: Box::new(rhs),
+                        op_span,
+                        span,
+                    }
+                }
+                OpInfo::AssignOp { op, op_span } => {
+                    let rhs = self.expr(BindingPower::Assign)?;
+                    let span = lhs.span().to(rhs.span());
+                    Expr::AssignOp {
+                        op,
+                        target: Box::new(lhs),
+                        rhs: Box::new(rhs),
+                        op_span,
+                        span,
+                    }
+                }
+                OpInfo::Assign => {
+                    let rhs = self.expr(BindingPower::Assign)?;
+                    let span = lhs.span().to(rhs.span());
+                    Expr::Assign {
+                        target: Box::new(lhs),
+                        rhs: Box::new(rhs),
+                        span,
+                    }
+                }
+                OpInfo::Call => {
+                    if self.peek(RParen)? {
+                        let last = self.expect(RParen)?;
+                        let span = lhs.span().to(last.span);
+                        Expr::Call {
+                            func: Box::new(lhs),
+                            args: Vec::new(),
+                            span,
+                        }
+                    } else {
+                        let mut args = vec![self.expr(BindingPower::Start)?];
+                        while !self.peek(RParen)? && !self.peek([Comma, RParen])? {
+                            self.expect(Comma)?;
+                            args.push(self.expr(BindingPower::Start)?);
+                        }
+                        self.consume(Comma)?;
+                        let last = self.expect(RParen)?;
+                        let span = lhs.span().to(last.span);
+                        Expr::Call {
+                            func: Box::new(lhs),
+                            args,
+                            span,
+                        }
+                    }
+                }
+                OpInfo::MethodCall => {
+                    let name = self.generic_segment()?;
+                    self.expect(LParen)?;
+                    if self.peek(RParen)? {
+                        let last = self.expect(RParen)?;
+                        let span = lhs.span().to(last.span);
+                        Expr::MethodCall {
+                            receiver: Box::new(lhs),
+                            name,
+                            args: Vec::new(),
+                            span,
+                        }
+                    } else {
+                        let mut args = vec![self.expr(BindingPower::Start)?];
+                        while !self.peek(RParen)? && !self.peek([Comma, RParen])? {
+                            self.expect(Comma)?;
+                            args.push(self.expr(BindingPower::Start)?);
+                        }
+                        self.consume(Comma)?;
+                        let last = self.expect(RParen)?;
+                        let span = lhs.span().to(last.span);
+                        Expr::MethodCall {
+                            receiver: Box::new(lhs),
+                            name,
+                            args,
+                            span,
+                        }
+                    }
+                }
+                OpInfo::Index => {
+                    let index = self.expr(BindingPower::Start)?;
+                    let last = self.expect(RBrack)?;
+                    let span = lhs.span().to(last.span);
+                    Expr::Index {
+                        expr: Box::new(lhs),
+                        index: Box::new(index),
+                        span,
+                    }
+                }
+                OpInfo::Field => {
+                    let name = self.name()?;
+                    let span = lhs.span().to(name.span);
+                    Expr::Field {
+                        expr: Box::new(lhs),
+                        name,
+                        span,
+                    }
+                }
+                OpInfo::Cast => {
+                    let ty = self.ty()?;
+                    let span = lhs.span().to(ty.span());
+                    Expr::Cast {
+                        expr: Box::new(lhs),
+                        ty,
+                        span,
+                    }
+                }
+                OpInfo::Range { range_span } => {
+                    let (high, span) = if self.peek_kind()?.is_expr_start() {
+                        let high = self.expr(BindingPower::Range)?;
+                        let span = lhs.span().to(high.span());
+                        (Some(Box::new(high)), span)
+                    } else {
+                        (None, lhs.span().to(range_span))
+                    };
+
+                    Expr::Range {
+                        low: Some(Box::new(lhs)),
+                        high,
+                        range_span,
+                        span,
+                    }
+                }
+            };
+        }
+
+        while self.peek(QMark)? {
+            let qmark_span = self.expect(QMark)?.span;
+            let span = lhs.span().to(qmark_span);
+            lhs = Expr::Try {
+                expr: Box::new(lhs),
+                qmark_span,
+                span,
+            }
+        }
 
         Ok(lhs)
+    }
+
+    fn next_op(&mut self, bp: BindingPower) -> Result<Option<OpInfo<'a, 'b>>, Error<'a, 'b>> {
+        macro_rules! assign_op {
+            ($tok1:ident, $tok2:ident => $op:ident) => {{
+                if BindingPower::Assign < bp {
+                    return Ok(None);
+                }
+
+                let span1 = self.expect($tok1)?.span;
+                let span2 = self.expect($tok2)?.span;
+                let op_span = span1.by(span2)?;
+                Ok(Some(OpInfo::AssignOp {
+                    op: AssignOp::$op,
+                    op_span,
+                }))
+            }};
+
+            ($tok1:ident, $tok2:ident, $tok3:ident => $op:ident) => {{
+                if BindingPower::Assign < bp {
+                    return Ok(None);
+                }
+
+                let span1 = self.expect($tok1)?.span;
+                let span2 = self.expect($tok2)?.span;
+                let span3 = self.expect($tok3)?.span;
+                let op_span = span1.by(span2)?.by(span3)?;
+                Ok(Some(OpInfo::AssignOp {
+                    op: AssignOp::$op,
+                    op_span,
+                }))
+            }};
+        }
+
+        macro_rules! bop {
+            ($tok:ident => $op:ident, $bp:ident) => {{
+                if BindingPower::$bp <= bp {
+                    return Ok(None);
+                }
+
+                let op_span = self.expect($tok)?.span;
+                Ok(Some(OpInfo::BinOp {
+                    op: BinOp::$op,
+                    op_span,
+                    bp: BindingPower::$bp,
+                }))
+            }};
+
+            ($tok1:ident, $tok2:ident => $op:ident, $bp:ident) => {{
+                if BindingPower::$bp <= bp {
+                    return Ok(None);
+                }
+
+                let first_span = self.expect($tok1)?.span;
+                let last_span = self.expect($tok2)?.span;
+                let op_span = first_span.by(last_span)?;
+
+                Ok(Some(OpInfo::BinOp {
+                    op: BinOp::$op,
+                    op_span,
+                    bp: BindingPower::$bp,
+                }))
+            }};
+        }
+
+        println!("HERE: {:?}", self.peek_kind());
+
+        if self.peek([Plus, Eq])? {
+            assign_op!(Plus, Eq => Add)
+        } else if self.peek([Dash, Eq])? {
+            assign_op!(Dash, Eq => Sub)
+        } else if self.peek([Star, Eq])? {
+            assign_op!(Star, Eq => Mul)
+        } else if self.peek([Slash, Eq])? {
+            assign_op!(Slash, Eq => Div)
+        } else if self.peek([Percent, Eq])? {
+            assign_op!(Percent, Eq => Rem)
+        } else if self.peek([Amp, Eq])? {
+            assign_op!(Amp, Eq => And)
+        } else if self.peek([Bar, Eq])? {
+            assign_op!(Bar, Eq => Or)
+        } else if self.peek([Caret, Eq])? {
+            assign_op!(Caret, Eq => Xor)
+        } else if self.peek([Lt, Lt, Eq])? {
+            assign_op!(Lt, Lt, Eq => Shl)
+        } else if self.peek([Gt, Gt, Eq])? {
+            assign_op!(Gt, Gt, Eq => Shr)
+        } else if self.peek(Plus)? {
+            bop!(Plus => Add, Sum)
+        } else if self.peek(Dash)? {
+            bop!(Dash => Sub, Sum)
+        } else if self.peek(Star)? {
+            bop!(Star => Mul, Prod)
+        } else if self.peek(Slash)? {
+            bop!(Slash => Div, Prod)
+        } else if self.peek(Percent)? {
+            bop!(Percent => Rem, Prod)
+        } else if self.peek(Amp)? {
+            bop!(Amp => And, And)
+        } else if self.peek(Bar)? {
+            bop!(Bar => Or, Or)
+        } else if self.peek(Caret)? {
+            bop!(Caret => Xor, Xor)
+        } else if self.peek(And)? {
+            bop!(And => LogicalAnd, LogicalAnd)
+        } else if self.peek(Or)? {
+            bop!(Or => LogicalOr, LogicalOr)
+        } else if self.peek([Lt, Lt])? {
+            bop!(Lt, Lt => Shl, Shift)
+        } else if self.peek([Gt, Gt])? {
+            bop!(Gt, Gt => Shr, Shift)
+        } else if self.peek([Eq, Eq])? {
+            bop!(Eq, Eq => Eq, Cmp)
+        } else if self.peek([Bang, Eq])? {
+            bop!(Bang, Eq => Ne, Cmp)
+        } else if self.peek([Lt, Eq])? {
+            bop!(Lt, Eq => Le, Cmp)
+        } else if self.peek([Gt, Eq])? {
+            bop!(Gt, Eq => Ge, Cmp)
+        } else if self.peek(Lt)? {
+            bop!(Lt => Lt, Cmp)
+        } else if self.peek(Gt)? {
+            bop!(Gt => Gt, Cmp)
+        } else if self.peek(Eq)? {
+            self.expect(Eq)?;
+            Ok(Some(OpInfo::Assign))
+        } else if self.peek(As)? {
+            self.expect(As)?;
+            Ok(Some(OpInfo::Cast))
+        } else if self.peek(LParen)? {
+            self.expect(LParen)?;
+            Ok(Some(OpInfo::Call))
+        } else if self.peek(LBrack)? {
+            self.expect(LBrack)?;
+            Ok(Some(OpInfo::Index))
+        } else if self.peek([Dot, Dot, Eq])? {
+            let first_span = self.expect(Dot)?.span;
+            let second_span = self.expect(Dot)?.span;
+            let last_span = self.expect(Eq)?.span;
+            let range_span = first_span.by(second_span)?.by(last_span)?;
+            Ok(Some(OpInfo::Range { range_span }))
+        } else if self.peek([Dot, Dot])? {
+            let first_span = self.expect(Dot)?.span;
+            let last_span = self.expect(Dot)?.span;
+            let range_span = first_span.by(last_span)?;
+            Ok(Some(OpInfo::Range { range_span }))
+        } else if self.peek(Dot)? {
+            self.expect(Dot)?;
+            if self.peek([Ident, LParen])? || self.peek([Ident, Colon])? {
+                Ok(Some(OpInfo::MethodCall))
+            } else {
+                Ok(Some(OpInfo::Field))
+            }
+        } else {
+            Ok(None)
+        }
     }
 
     fn paren_expr(&mut self) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
@@ -887,8 +1218,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 
         let expr = self.expr(BindingPower::Start)?;
         if self.peek(RParen)? {
-            self.expect(RParen)?;
-            return Ok(expr);
+            let last = self.expect(RParen)?;
+            let span = first.span.to(last.span);
+            return Ok(Expr::Paren {
+                expr: Box::new(expr),
+                span,
+            });
         }
 
         let mut exprs = vec![expr];
@@ -914,7 +1249,19 @@ impl<'a, 'b> Parser<'a, 'b> {
             });
         }
 
-        let mut exprs = vec![self.expr(BindingPower::Start)?];
+        let expr = self.expr(BindingPower::Start)?;
+        if self.consume(Semi)? {
+            let count = self.expect(Int)?.span;
+            let last = self.expect(RBrack)?;
+            let span = first.span.to(last.span);
+            return Ok(Expr::Repeat {
+                expr: Box::new(expr),
+                count,
+                span,
+            });
+        }
+
+        let mut exprs = vec![expr];
         while !self.peek(RBrack)? && !self.peek([Comma, RBrack])? {
             self.expect(Comma)?;
             exprs.push(self.expr(BindingPower::Start)?);
@@ -927,7 +1274,81 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     fn ident_expr(&mut self) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
-        todo!()
+        let path = self.generic_path()?;
+        if self.consume(LBrace)? {
+            if self.peek(RBrace)? {
+                let last = self.expect(RBrace)?;
+                let span = path.span.to(last.span);
+                return Ok(Expr::Struct {
+                    path,
+                    fields: Vec::new(),
+                    span,
+                });
+            }
+
+            let mut fields = vec![self.expr_field()?];
+            while !self.peek(RBrace)? && !self.peek([Comma, RBrace])? {
+                self.expect(Comma)?;
+                fields.push(self.expr_field()?);
+            }
+            self.consume(Comma)?;
+            let last = self.expect(RBrace)?;
+
+            let span = path.span.to(last.span);
+            Ok(Expr::Struct { path, fields, span })
+        } else {
+            let span = path.span;
+            Ok(Expr::Path { path, span })
+        }
+    }
+
+    fn generic_path(&mut self) -> Result<GenericPath<'a, 'b>, Error<'a, 'b>> {
+        let mut segments = vec![self.generic_segment()?];
+        while self.peek([Colon, Colon, Ident])? {
+            let first_colon = self.expect(Colon)?;
+            let last_colon = self.expect(Colon)?;
+            first_colon.span.by(last_colon.span)?;
+            segments.push(self.generic_segment()?);
+        }
+
+        let span = segments[0].span.to(segments.last().unwrap().span);
+        Ok(GenericPath { segments, span })
+    }
+
+    fn generic_segment(&mut self) -> Result<GenericSegment<'a, 'b>, Error<'a, 'b>> {
+        let name = self.name()?;
+        if self.peek([Colon, Colon, Lt])? {
+            let first_colon = self.expect(Colon)?;
+            let last_colon = self.expect(Colon)?;
+            first_colon.span.by(last_colon.span)?;
+            let generic_args = self.generic_args()?;
+
+            let span = name.span.to(generic_args.span);
+            Ok(GenericSegment {
+                name,
+                generic_args: Some(generic_args),
+                span,
+            })
+        } else {
+            let span = name.span;
+            Ok(GenericSegment {
+                name,
+                generic_args: None,
+                span,
+            })
+        }
+    }
+
+    fn expr_field(&mut self) -> Result<ExprField<'a, 'b>, Error<'a, 'b>> {
+        let name = self.name()?;
+        if self.consume(Colon)? {
+            let expr = self.expr(BindingPower::Start)?;
+            let span = name.span.to(expr.span());
+            Ok(ExprField::Expr { name, expr, span })
+        } else {
+            let span = name.span;
+            Ok(ExprField::Name { name, span })
+        }
     }
 
     fn if_expr(&mut self) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
@@ -1729,9 +2150,40 @@ impl<const N: usize> Sequence for [TokenKind; N] {
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum BindingPower {
     Start,
-    Prefix,
-    Try,
+    Assign,
+    Range,
+    LogicalOr,
+    LogicalAnd,
+    Cmp,
+    Or,
+    Xor,
+    And,
+    Shift,
+    Sum,
+    Prod,
+    Cast,
+}
+
+enum OpInfo<'a, 'b> {
+    BinOp {
+        op: BinOp,
+        op_span: Span<'a, 'b>,
+        bp: BindingPower,
+    },
+    AssignOp {
+        op: AssignOp,
+        op_span: Span<'a, 'b>,
+    },
+    Assign,
+    Call,
+    MethodCall,
+    Index,
+    Field,
+    Cast,
+    Range {
+        range_span: Span<'a, 'b>,
+    },
 }
