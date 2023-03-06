@@ -1,4 +1,4 @@
-use std::fmt::{self, Debug, Formatter};
+use std::fmt::{self, Debug};
 
 use crate::span::Span;
 
@@ -9,22 +9,18 @@ pub struct Name<'a, 'b> {
 }
 
 impl Debug for Name<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Name({:?})", self.name)
     }
 }
 
+#[derive(Debug)]
 pub struct Path<'a, 'b> {
     pub path: Vec<Name<'a, 'b>>,
     pub span: Span<'a, 'b>,
 }
 
-impl Debug for Path<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("Path").field(&self.path).finish()
-    }
-}
-
+#[derive(Debug)]
 pub enum Ty<'a, 'b> {
     Path {
         path: Path<'a, 'b>,
@@ -76,46 +72,13 @@ impl<'a, 'b> Ty<'a, 'b> {
     }
 }
 
-impl Debug for Ty<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Ty::Path {
-                path, generic_args, ..
-            } => f
-                .debug_struct("Path")
-                .field("path", path)
-                .field("generic_args", generic_args)
-                .finish(),
-            Ty::Ptr { ty, .. } => f.debug_tuple("Ptr").field(ty).finish(),
-            Ty::Tuple { tys, .. } => f.debug_tuple("Tuple").field(tys).finish(),
-            Ty::Slice { ty, .. } => f.debug_tuple("Slice").field(ty).finish(),
-            Ty::Array { ty, count, .. } => f
-                .debug_struct("Array")
-                .field("ty", ty)
-                .field("count", count)
-                .finish(),
-            Ty::Fn { params, ret, .. } => f
-                .debug_struct("Fn")
-                .field("params", params)
-                .field("ret", ret)
-                .finish(),
-            Ty::SelfType { .. } => f.debug_tuple("SelfType").finish(),
-            Ty::Never { .. } => f.debug_tuple("Never").finish(),
-        }
-    }
-}
-
+#[derive(Debug)]
 pub struct GenericArgs<'a, 'b> {
     pub args: Vec<Ty<'a, 'b>>,
     pub span: Span<'a, 'b>,
 }
 
-impl Debug for GenericArgs<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("GenericArgs").field(&self.args).finish()
-    }
-}
-
+#[derive(Debug)]
 pub enum Item<'a, 'b> {
     Use {
         tree: UseTree<'a, 'b>,
@@ -208,139 +171,11 @@ impl<'a, 'b> Item<'a, 'b> {
     }
 }
 
-impl Debug for Item<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Item::Use { tree, .. } => f.debug_tuple("Use").field(&tree).finish(),
-            Item::Struct {
-                is_pub,
-                name,
-                generic_params,
-                fields,
-                ..
-            } => f
-                .debug_struct("Struct")
-                .field("is_pub", is_pub)
-                .field("name", name)
-                .field("generic_params", generic_params)
-                .field("fields", fields)
-                .finish(),
-            Item::Enum {
-                is_pub,
-                name,
-                generic_params,
-                items,
-                ..
-            } => f
-                .debug_struct("Enum")
-                .field("is_pub", is_pub)
-                .field("name", name)
-                .field("generic_params", generic_params)
-                .field("items", items)
-                .finish(),
-            Item::Type {
-                is_pub,
-                name,
-                generic_params,
-                ty,
-                ..
-            } => f
-                .debug_struct("Type")
-                .field("is_pub", is_pub)
-                .field("name", name)
-                .field("generic_params", generic_params)
-                .field("ty", ty)
-                .finish(),
-            Item::Mod { is_pub, name, .. } => f
-                .debug_struct("Mod")
-                .field("is_pub", is_pub)
-                .field("name", name)
-                .finish(),
-            Item::Extern { items, .. } => f.debug_tuple("Extern").field(items).finish(),
-            Item::Trait {
-                name,
-                generic_params,
-                self_bounds,
-                where_clause,
-                items,
-                ..
-            } => f
-                .debug_struct("Trait")
-                .field("name", name)
-                .field("generic_params", generic_params)
-                .field("self_bounds", self_bounds)
-                .field("where_clause", where_clause)
-                .field("items", items)
-                .finish(),
-            Item::Fn {
-                is_pub,
-                signature,
-                block,
-                ..
-            } => f
-                .debug_struct("Fn")
-                .field("is_pub", is_pub)
-                .field("signature", signature)
-                .field("block", block)
-                .finish(),
-            Item::Impl {
-                name,
-                generic_params,
-                as_trait,
-                where_clause,
-                fns,
-                ..
-            } => f
-                .debug_struct("Impl")
-                .field("name", name)
-                .field("generic_params", generic_params)
-                .field("as_trait", as_trait)
-                .field("where_clause", where_clause)
-                .field("fns", fns)
-                .finish(),
-            Item::Const {
-                is_pub,
-                name,
-                ty,
-                expr,
-                ..
-            } => f
-                .debug_struct("Const")
-                .field("is_pub", is_pub)
-                .field("name", name)
-                .field("ty", ty)
-                .field("expr", expr)
-                .finish(),
-            Item::Static {
-                is_pub,
-                name,
-                ty,
-                expr,
-                ..
-            } => f
-                .debug_struct("Static")
-                .field("is_pub", is_pub)
-                .field("name", name)
-                .field("ty", ty)
-                .field("expr", expr)
-                .finish(),
-        }
-    }
-}
-
+#[derive(Debug)]
 pub struct UseTree<'a, 'b> {
     pub prefix: Path<'a, 'b>,
     pub kind: UseTreeKind<'a, 'b>,
     pub span: Span<'a, 'b>,
-}
-
-impl Debug for UseTree<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("UseTree")
-            .field("prefix", &self.prefix)
-            .field("kind", &self.kind)
-            .finish()
-    }
 }
 
 #[derive(Debug)]
@@ -350,38 +185,20 @@ pub enum UseTreeKind<'a, 'b> {
     Nested(Vec<UseTree<'a, 'b>>),
 }
 
+#[derive(Debug)]
 pub struct StructField<'a, 'b> {
     pub is_pub: bool,
     pub name: Name<'a, 'b>,
     pub ty: Ty<'a, 'b>,
     pub span: Span<'a, 'b>,
 }
-
-impl Debug for StructField<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("StructField")
-            .field("is_pub", &self.is_pub)
-            .field("name", &self.name)
-            .field("type", &self.ty)
-            .finish()
-    }
-}
-
+#[derive(Debug)]
 pub struct EnumItem<'a, 'b> {
     pub name: Name<'a, 'b>,
     pub tuple: Option<Vec<Ty<'a, 'b>>>,
     pub span: Span<'a, 'b>,
 }
-
-impl Debug for EnumItem<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("EnumItem")
-            .field("name", &self.name)
-            .field("tuple", &self.tuple)
-            .finish()
-    }
-}
-
+#[derive(Debug)]
 pub enum ExternItem<'a, 'b> {
     Fn {
         is_pub: bool,
@@ -410,34 +227,7 @@ impl<'a, 'b> ExternItem<'a, 'b> {
         }
     }
 }
-
-impl Debug for ExternItem<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            ExternItem::Fn {
-                is_pub, signature, ..
-            } => f
-                .debug_struct("Fn")
-                .field("is_pub", is_pub)
-                .field("signature", signature)
-                .finish(),
-            ExternItem::Type { is_pub, name, .. } => f
-                .debug_struct("Type")
-                .field("is_pub", is_pub)
-                .field("name", name)
-                .finish(),
-            ExternItem::Static {
-                is_pub, name, ty, ..
-            } => f
-                .debug_struct("Static")
-                .field("is_pub", is_pub)
-                .field("name", name)
-                .field("ty", ty)
-                .finish(),
-        }
-    }
-}
-
+#[derive(Debug)]
 pub struct Signature<'a, 'b> {
     pub name: Name<'a, 'b>,
     pub generic_params: Option<GenericParams<'a, 'b>>,
@@ -447,31 +237,12 @@ pub struct Signature<'a, 'b> {
     pub where_clause: Option<WhereClause<'a, 'b>>,
     pub span: Span<'a, 'b>,
 }
-
+#[derive(Debug)]
 pub struct GenericParams<'a, 'b> {
     pub params: Vec<Name<'a, 'b>>,
     pub span: Span<'a, 'b>,
 }
-
-impl Debug for GenericParams<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("GenericParams").field(&self.params).finish()
-    }
-}
-
-impl Debug for Signature<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Signature")
-            .field("name", &self.name)
-            .field("generic_params", &self.generic_params)
-            .field("self_kind", &self.self_kind)
-            .field("params", &self.params)
-            .field("ret", &self.ret)
-            .field("where_clause", &self.where_clause)
-            .finish()
-    }
-}
-
+#[derive(Debug)]
 pub enum SelfKind<'a, 'b> {
     Ptr(Span<'a, 'b>),
     Value(Span<'a, 'b>),
@@ -490,43 +261,18 @@ impl<'a, 'b> SelfKind<'a, 'b> {
         matches!(self, SelfKind::None)
     }
 }
-
-impl Debug for SelfKind<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            SelfKind::Ptr(..) => f.debug_tuple("Ptr").finish(),
-            SelfKind::Value(..) => f.debug_tuple("Value").finish(),
-            SelfKind::None => f.debug_tuple("None").finish(),
-        }
-    }
-}
-
+#[derive(Debug)]
 pub struct Param<'a, 'b> {
     pub pattern: Pattern<'a, 'b>,
     pub ty: Ty<'a, 'b>,
     pub span: Span<'a, 'b>,
 }
-
-impl Debug for Param<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Param")
-            .field("pattern", &self.pattern)
-            .field("ty", &self.ty)
-            .finish()
-    }
-}
-
+#[derive(Debug)]
 pub struct WhereClause<'a, 'b> {
     pub items: Vec<WhereItem<'a, 'b>>,
     pub span: Span<'a, 'b>,
 }
-
-impl Debug for WhereClause<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("WhereClause").field(&self.items).finish()
-    }
-}
-
+#[derive(Debug)]
 pub enum WhereItem<'a, 'b> {
     Bound {
         param: Name<'a, 'b>,
@@ -547,24 +293,7 @@ impl<'a, 'b> WhereItem<'a, 'b> {
         }
     }
 }
-
-impl Debug for WhereItem<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            WhereItem::Bound { param, bounds, .. } => f
-                .debug_struct("Bound")
-                .field("param", param)
-                .field("bounds", bounds)
-                .finish(),
-            WhereItem::Eq { param, ty, .. } => f
-                .debug_struct("Eq")
-                .field("param", param)
-                .field("ty", ty)
-                .finish(),
-        }
-    }
-}
-
+#[derive(Debug)]
 pub enum TraitBound<'a, 'b> {
     Trait {
         path: Path<'a, 'b>,
@@ -586,29 +315,7 @@ impl<'a, 'b> TraitBound<'a, 'b> {
         }
     }
 }
-
-impl Debug for TraitBound<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            TraitBound::Trait {
-                path, generic_args, ..
-            } => f
-                .debug_struct("Trait")
-                .field("path", path)
-                .field("generic_args", generic_args)
-                .finish(),
-            TraitBound::Fn {
-                path, params, ret, ..
-            } => f
-                .debug_struct("Fn")
-                .field("path", path)
-                .field("params", params)
-                .field("ret", ret)
-                .finish(),
-        }
-    }
-}
-
+#[derive(Debug)]
 pub enum TraitItem<'a, 'b> {
     Required {
         signature: Signature<'a, 'b>,
@@ -628,39 +335,14 @@ impl<'a, 'b> TraitItem<'a, 'b> {
         }
     }
 }
-
-impl Debug for TraitItem<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            TraitItem::Required { signature, .. } => {
-                f.debug_tuple("Required").field(signature).finish()
-            }
-            TraitItem::Provided {
-                signature, block, ..
-            } => f
-                .debug_struct("Provided")
-                .field("signature", signature)
-                .field("block", block)
-                .finish(),
-        }
-    }
-}
-
+#[derive(Debug)]
 pub struct Block<'a, 'b> {
     pub stmts: Vec<Stmt<'a, 'b>>,
     pub expr: Option<Box<Expr<'a, 'b>>>,
     pub span: Span<'a, 'b>,
 }
 
-impl Debug for Block<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Block")
-            .field("stmts", &self.stmts)
-            .field("expr", &self.expr)
-            .finish()
-    }
-}
-
+#[derive(Debug)]
 pub enum Stmt<'a, 'b> {
     Local {
         pattern: Pattern<'a, 'b>,
@@ -685,24 +367,7 @@ impl<'a, 'b> Stmt<'a, 'b> {
         }
     }
 }
-
-impl Debug for Stmt<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Stmt::Local {
-                pattern, ty, expr, ..
-            } => f
-                .debug_struct("Local")
-                .field("pattern", pattern)
-                .field("ty", ty)
-                .field("expr", expr)
-                .finish(),
-            Stmt::Item { item, .. } => f.debug_tuple("Item").field(item).finish(),
-            Stmt::Expr { expr, .. } => f.debug_tuple("Expr").field(expr).finish(),
-        }
-    }
-}
-
+#[derive(Debug)]
 pub enum Expr<'a, 'b> {
     Array {
         exprs: Vec<Expr<'a, 'b>>,
@@ -926,202 +591,23 @@ impl<'a, 'b> Expr<'a, 'b> {
         matches!(self, Expr::Range { .. })
     }
 }
-
-impl Debug for Expr<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Expr::Array { exprs, .. } => f.debug_tuple("Array").field(exprs).finish(),
-            Expr::Call { func, args, .. } => f
-                .debug_struct("Call")
-                .field("func", func)
-                .field("args", args)
-                .finish(),
-            Expr::MethodCall {
-                receiver,
-                name,
-                args,
-                ..
-            } => f
-                .debug_struct("MethodCall")
-                .field("receiver", receiver)
-                .field("name", name)
-                .field("args", args)
-                .finish(),
-            Expr::Tuple { exprs, .. } => f.debug_tuple("Tuple").field(exprs).finish(),
-            Expr::Binary { op, lhs, rhs, .. } => f
-                .debug_struct("Binary")
-                .field("op", op)
-                .field("lhs", lhs)
-                .field("rhs", rhs)
-                .finish(),
-            Expr::Unary { op, expr, .. } => f
-                .debug_struct("Unary")
-                .field("op", op)
-                .field("expr", expr)
-                .finish(),
-            Expr::Literal { kind, span } => f
-                .debug_struct("Literal")
-                .field("kind", kind)
-                .field("span", span)
-                .finish(),
-            Expr::SelfValue { .. } => f.debug_tuple("SelfValue").finish(),
-            Expr::Cast { expr, ty, .. } => f
-                .debug_struct("Cast")
-                .field("expr", expr)
-                .field("ty", ty)
-                .finish(),
-            Expr::If {
-                test,
-                block,
-                else_kind,
-                ..
-            } => f
-                .debug_struct("If")
-                .field("test", test)
-                .field("block", block)
-                .field("else_kind", else_kind)
-                .finish(),
-            Expr::IfLet {
-                pattern,
-                expr,
-                block,
-                else_kind,
-                ..
-            } => f
-                .debug_struct("IfLet")
-                .field("pattern", pattern)
-                .field("expr", expr)
-                .field("block", block)
-                .field("else_kind", else_kind)
-                .finish(),
-            Expr::While { test, block, .. } => f
-                .debug_struct("While")
-                .field("test", test)
-                .field("block", block)
-                .finish(),
-            Expr::WhileLet {
-                pattern,
-                expr,
-                block,
-                ..
-            } => f
-                .debug_struct("WhileLet")
-                .field("pattern", pattern)
-                .field("expr", expr)
-                .field("block", block)
-                .finish(),
-            Expr::Match { expr, arms, .. } => f
-                .debug_struct("Match")
-                .field("expr", expr)
-                .field("arms", arms)
-                .finish(),
-            Expr::Block { block, .. } => f.debug_tuple("Block").field(block).finish(),
-            Expr::For {
-                pattern,
-                iter,
-                block,
-                ..
-            } => f
-                .debug_struct("For")
-                .field("pattern", pattern)
-                .field("iter", iter)
-                .field("block", block)
-                .finish(),
-            Expr::Loop { block, .. } => f.debug_tuple("Loop").field(block).finish(),
-            Expr::TryBlock { block, .. } => f.debug_tuple("TryBlock").field(block).finish(),
-            Expr::Label { label, .. } => f.debug_tuple("Label").field(label).finish(),
-            Expr::Goto { label, expr, .. } => f
-                .debug_struct("Goto")
-                .field("label", label)
-                .field("expr", expr)
-                .finish(),
-            Expr::Try { expr, .. } => f.debug_tuple("Try").field(expr).finish(),
-            Expr::Assign { target, rhs, .. } => f
-                .debug_struct("Assign")
-                .field("target", target)
-                .field("rhs", rhs)
-                .finish(),
-            Expr::AssignOp {
-                op, target, rhs, ..
-            } => f
-                .debug_struct("AssignOp")
-                .field("op", op)
-                .field("target", target)
-                .field("rhs", rhs)
-                .finish(),
-            Expr::Field { expr, name, .. } => f
-                .debug_struct("Field")
-                .field("expr", expr)
-                .field("name", name)
-                .finish(),
-            Expr::Index { expr, index, .. } => f
-                .debug_struct("Index")
-                .field("expr", expr)
-                .field("index", index)
-                .finish(),
-            Expr::Range { low, high, .. } => f
-                .debug_struct("Range")
-                .field("low", low)
-                .field("high", high)
-                .finish(),
-            Expr::Path { path, .. } => f.debug_tuple("Path").field(path).finish(),
-            Expr::Break { expr, .. } => f.debug_tuple("Break").field(expr).finish(),
-            Expr::Continue { .. } => f.debug_tuple("Continue").finish(),
-            Expr::Return { expr, .. } => f.debug_tuple("Return").field(expr).finish(),
-            Expr::Struct { path, fields, .. } => f
-                .debug_struct("Struct")
-                .field("path", path)
-                .field("fields", fields)
-                .finish(),
-            Expr::Repeat { expr, count, .. } => f
-                .debug_struct("Repeat")
-                .field("expr", expr)
-                .field("count", count)
-                .finish(),
-            Expr::Paren { expr, .. } => f.debug_tuple("Paren").field(expr).finish(),
-        }
-    }
-}
+#[derive(Debug)]
 
 pub struct GenericPath<'a, 'b> {
     pub segments: Vec<GenericSegment<'a, 'b>>,
     pub span: Span<'a, 'b>,
 }
-
-impl Debug for GenericPath<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("GenericPath").field(&self.segments).finish()
-    }
-}
-
+#[derive(Debug)]
 pub struct GenericSegment<'a, 'b> {
     pub name: Name<'a, 'b>,
     pub generic_args: Option<GenericArgs<'a, 'b>>,
     pub span: Span<'a, 'b>,
 }
-
-impl Debug for GenericSegment<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("GenericSegment")
-            .field("name", &self.name)
-            .field("generic_args", &self.generic_args)
-            .finish()
-    }
-}
-
+#[derive(Debug)]
 pub struct MatchArm<'a, 'b> {
     pub pattern: Pattern<'a, 'b>,
     pub body: Expr<'a, 'b>,
     pub span: Span<'a, 'b>,
-}
-
-impl Debug for MatchArm<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("MatchArm")
-            .field("pattern", &self.pattern)
-            .field("body", &self.body)
-            .finish()
-    }
 }
 
 #[derive(Debug)]
@@ -1180,16 +666,12 @@ pub enum AssignOp {
     Shr,
 }
 
+#[derive(Debug)]
 pub struct Label<'a, 'b> {
     pub name: Name<'a, 'b>,
     pub span: Span<'a, 'b>,
 }
-
-impl Debug for Label<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Label").field("name", &self.name).finish()
-    }
-}
+#[derive(Debug)]
 
 pub enum ElseKind<'a, 'b> {
     Else {
@@ -1224,40 +706,7 @@ impl<'a, 'b> ElseKind<'a, 'b> {
         }
     }
 }
-
-impl Debug for ElseKind<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            ElseKind::Else { block, .. } => f.debug_tuple("Else").field(block).finish(),
-            ElseKind::ElseIf {
-                test,
-                block,
-                else_kind,
-                ..
-            } => f
-                .debug_struct("ElseIf")
-                .field("test", test)
-                .field("block", block)
-                .field("else_kind", else_kind)
-                .finish(),
-            ElseKind::ElseIfLet {
-                pattern,
-                expr,
-                block,
-                else_kind,
-                ..
-            } => f
-                .debug_struct("ElseIfLet")
-                .field("pattern", pattern)
-                .field("expr", expr)
-                .field("block", block)
-                .field("else_kind", else_kind)
-                .finish(),
-            ElseKind::Nothing { .. } => f.debug_tuple("Nothing").finish(),
-        }
-    }
-}
-
+#[derive(Debug)]
 pub enum ExprField<'a, 'b> {
     Name {
         name: Name<'a, 'b>,
@@ -1277,20 +726,7 @@ impl<'a, 'b> ExprField<'a, 'b> {
         }
     }
 }
-
-impl Debug for ExprField<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            ExprField::Name { name, .. } => f.debug_tuple("Name").field(name).finish(),
-            ExprField::Expr { name, expr, .. } => f
-                .debug_struct("Expr")
-                .field("name", name)
-                .field("expr", expr)
-                .finish(),
-        }
-    }
-}
-
+#[derive(Debug)]
 pub enum Pattern<'a, 'b> {
     Wild {
         span: Span<'a, 'b>,
@@ -1332,59 +768,17 @@ impl<'a, 'b> Pattern<'a, 'b> {
         }
     }
 }
-
-impl Debug for Pattern<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Pattern::Wild { .. } => f.debug_tuple("Wild").finish(),
-            Pattern::Path { path, .. } => f.debug_tuple("Path").field(path).finish(),
-            Pattern::Struct {
-                path, fields, dots, ..
-            } => f
-                .debug_struct("Struct")
-                .field("path", path)
-                .field("fields", fields)
-                .field("dots", dots)
-                .finish(),
-            Pattern::Enum { path, tuple, .. } => f
-                .debug_struct("Enum")
-                .field("path", path)
-                .field("tuple", tuple)
-                .finish(),
-            Pattern::Tuple { tuple, .. } => f.debug_tuple("Tuple").field(tuple).finish(),
-            Pattern::Array { array, .. } => f.debug_tuple("Array").field(array).finish(),
-        }
-    }
-}
-
+#[derive(Debug)]
 pub struct FieldPattern<'a, 'b> {
     pub name: Name<'a, 'b>,
     pub pattern: Option<Pattern<'a, 'b>>,
     pub span: Span<'a, 'b>,
 }
 
-impl Debug for FieldPattern<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("FieldPattern")
-            .field("name", &self.name)
-            .field("pattern", &self.pattern)
-            .finish()
-    }
-}
-
+#[derive(Debug)]
 pub struct ImplFn<'a, 'b> {
     pub is_pub: bool,
     pub signature: Signature<'a, 'b>,
     pub block: Block<'a, 'b>,
     pub span: Span<'a, 'b>,
-}
-
-impl Debug for ImplFn<'_, '_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ImplFn")
-            .field("is_pub", &self.is_pub)
-            .field("signature", &self.signature)
-            .field("block", &self.block)
-            .finish()
-    }
 }
