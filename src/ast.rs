@@ -494,6 +494,11 @@ pub enum Expr {
         name: Name,
         span: Span,
     },
+    TupleField {
+        expr: Box<Expr>,
+        index: Span,
+        span: Span,
+    },
     Index {
         expr: Box<Expr>,
         index: Box<Expr>,
@@ -563,6 +568,7 @@ impl Expr {
             | Expr::Assign { span, .. }
             | Expr::AssignOp { span, .. }
             | Expr::Field { span, .. }
+            | Expr::TupleField { span, .. }
             | Expr::Index { span, .. }
             | Expr::Range { span, .. }
             | Expr::Path { span, .. }

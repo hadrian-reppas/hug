@@ -185,8 +185,7 @@ impl<'a> Parser<'a> {
                         ty: Box::new(ty),
                         span,
                     })
-                } else if self.peek(Semi)? {
-                    self.expect(Semi)?;
+                } else if self.consume(Semi)? {
                     let count = self.expect(Int)?.span;
                     let last = self.expect(RBrack)?;
 
@@ -1051,12 +1050,33 @@ impl<'a> Parser<'a> {
                         ));
                     }
 
-                    let name = self.name()?;
-                    let span = lhs.span().to(name.span);
-                    Expr::Field {
-                        expr: Box::new(lhs),
-                        name,
-                        span,
+                    if self.peek(Ident)? {
+                        let name = self.name()?;
+                        let span = lhs.span().to(name.span);
+                        Expr::Field {
+                            expr: Box::new(lhs),
+                            name,
+                            span,
+                        }
+                    } else if self.peek(Int)? {
+                        let index = self.expect(Int)?.span;
+                        let span = lhs.span().to(index);
+                        Expr::TupleField {
+                            expr: Box::new(lhs),
+                            index,
+                            span,
+                        }
+                    } else {
+                        return Err(Error::Parse(
+                            format!(
+                                "expected {} or {}, found {}",
+                                Ident.desc(),
+                                Int.desc(),
+                                self.peek_kind()?.desc()
+                            ),
+                            self.peek_span()?,
+                            vec![],
+                        ));
                     }
                 }
                 OpInfo::Cast => {
