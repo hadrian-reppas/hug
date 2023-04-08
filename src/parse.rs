@@ -2,28 +2,29 @@ use std::collections::VecDeque;
 
 use crate::ast::*;
 use crate::error::{Error, Note};
+use crate::io::FileId;
 use crate::lex::{Token, TokenKind, TokenKind::*, Tokens};
 use crate::span::Span;
 
-pub fn parse<'a, 'b>(code: &'a str, file: &'b str) -> Result<Vec<Item<'a, 'b>>, Error<'a, 'b>> {
-    let mut parser = Parser::new(code, file);
+pub fn parse(code: &str, file_id: FileId) -> Result<Vec<Item>, Error> {
+    let mut parser = Parser::new(code, file_id);
     parser.unit()
 }
 
-struct Parser<'a, 'b> {
-    tokens: Tokens<'a, 'b>,
-    peek: VecDeque<Token<'a, 'b>>,
+struct Parser<'a> {
+    tokens: Tokens<'a>,
+    peek: VecDeque<Token>,
 }
 
-impl<'a, 'b> Parser<'a, 'b> {
-    fn new(code: &'a str, file: &'b str) -> Self {
+impl<'a> Parser<'a> {
+    fn new(code: &'a str, file_id: FileId) -> Self {
         Parser {
-            tokens: Tokens::new(code, file),
+            tokens: Tokens::new(code, file_id),
             peek: VecDeque::new(),
         }
     }
 
-    fn next(&mut self) -> Result<Token<'a, 'b>, Error<'a, 'b>> {
+    fn next(&mut self) -> Result<Token, Error> {
         if let Some(token) = self.peek.pop_front() {
             Ok(token)
         } else {
@@ -31,7 +32,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn expect(&mut self, expected: TokenKind) -> Result<Token<'a, 'b>, Error<'a, 'b>> {
+    fn expect(&mut self, expected: TokenKind) -> Result<Token, Error> {
         let token = self.next()?;
         if token.kind == expected {
             Ok(token)
@@ -44,7 +45,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn peek<S: Sequence>(&mut self, sequence: S) -> Result<bool, Error<'a, 'b>> {
+    fn peek<S: Sequence>(&mut self, sequence: S) -> Result<bool, Error> {
         for (i, &kind) in sequence.as_slice().iter().enumerate() {
             if i == self.peek.len() {
                 self.peek.push_back(self.tokens.next()?);
@@ -56,21 +57,21 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(true)
     }
 
-    fn peek_kind(&mut self) -> Result<TokenKind, Error<'a, 'b>> {
+    fn peek_kind(&mut self) -> Result<TokenKind, Error> {
         if self.peek.is_empty() {
             self.peek.push_back(self.tokens.next()?);
         }
         Ok(self.peek[0].kind)
     }
 
-    fn peek_span(&mut self) -> Result<Span<'a, 'b>, Error<'a, 'b>> {
+    fn peek_span(&mut self) -> Result<Span, Error> {
         if self.peek.is_empty() {
             self.peek.push_back(self.tokens.next()?);
         }
         Ok(self.peek[0].span)
     }
 
-    fn consume<S: Sequence>(&mut self, sequence: S) -> Result<bool, Error<'a, 'b>> {
+    fn consume<S: Sequence>(&mut self, sequence: S) -> Result<bool, Error> {
         let len = sequence.as_slice().len();
         if self.peek(sequence)? {
             for _ in 0..len {
@@ -82,7 +83,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn unit(&mut self) -> Result<Vec<Item<'a, 'b>>, Error<'a, 'b>> {
+    fn unit(&mut self) -> Result<Vec<Item>, Error> {
         let mut items = Vec::new();
         while !self.peek(Eof)? {
             items.push(self.item()?);
@@ -90,7 +91,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(items)
     }
 
-    fn item(&mut self) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+    fn item(&mut self) -> Result<Item, Error> {
         let pub_span = if self.peek(Pub)? {
             Some(self.next()?.span)
         } else {
@@ -117,7 +118,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn ty(&mut self) -> Result<Ty<'a, 'b>, Error<'a, 'b>> {
+    fn ty(&mut self) -> Result<Ty, Error> {
         match self.peek_kind()? {
             Ident => {
                 let path = self.path()?;
@@ -258,7 +259,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn generic_args(&mut self) -> Result<GenericArgs<'a, 'b>, Error<'a, 'b>> {
+    fn generic_args(&mut self) -> Result<GenericArgs, Error> {
         let first = self.expect(Lt)?;
 
         if self.peek(Gt)? {
@@ -282,7 +283,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(GenericArgs { args, span })
     }
 
-    fn use_decl(&mut self, pub_span: Option<Span<'a, 'b>>) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+    fn use_decl(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
         self.disallow_pub(pub_span, Use)?;
 
         let first = self.expect(Use)?;
@@ -294,7 +295,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn use_tree(&mut self) -> Result<UseTree<'a, 'b>, Error<'a, 'b>> {
+    fn use_tree(&mut self) -> Result<UseTree, Error> {
         let prefix = self.path()?;
         if self.consume([Colon, Colon, LBrace])? {
             if self.peek(RBrace)? {
@@ -338,10 +339,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn struct_def(
-        &mut self,
-        pub_span: Option<Span<'a, 'b>>,
-    ) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+    fn struct_def(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Struct)?;
 
         let name = self.name()?;
@@ -383,7 +381,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn generic_params(&mut self) -> Result<GenericParams<'a, 'b>, Error<'a, 'b>> {
+    fn generic_params(&mut self) -> Result<GenericParams, Error> {
         let first = self.expect(Lt)?;
 
         if self.peek(Gt)? {
@@ -407,7 +405,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(GenericParams { params, span })
     }
 
-    fn struct_field(&mut self) -> Result<StructField<'a, 'b>, Error<'a, 'b>> {
+    fn struct_field(&mut self) -> Result<StructField, Error> {
         if self.peek(Pub)? {
             let pub_span = self.expect(Pub)?.span;
             let name = self.name()?;
@@ -436,7 +434,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn enum_def(&mut self, pub_span: Option<Span<'a, 'b>>) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+    fn enum_def(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Enum)?;
 
         let name = self.name()?;
@@ -478,14 +476,15 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn enum_item(&mut self) -> Result<EnumItem<'a, 'b>, Error<'a, 'b>> {
+    fn enum_item(&mut self) -> Result<EnumItem, Error> {
         let name = self.name()?;
 
         if !self.consume(LParen)? {
+            let span = name.span;
             return Ok(EnumItem {
                 name,
                 tuple: None,
-                span: name.span,
+                span,
             });
         }
 
@@ -515,10 +514,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn type_alias(
-        &mut self,
-        pub_span: Option<Span<'a, 'b>>,
-    ) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+    fn type_alias(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Type)?;
 
         let name = self.name()?;
@@ -542,7 +538,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn module(&mut self, pub_span: Option<Span<'a, 'b>>) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+    fn module(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Mod)?;
         let name = self.name()?;
         let last = self.expect(Semi)?;
@@ -551,7 +547,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(Item::Mod { is_pub, name, span })
     }
 
-    fn trait_def(&mut self, pub_span: Option<Span<'a, 'b>>) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+    fn trait_def(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Trait)?;
 
         let name = self.name()?;
@@ -598,7 +594,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn trait_item(&mut self) -> Result<TraitItem<'a, 'b>, Error<'a, 'b>> {
+    fn trait_item(&mut self) -> Result<TraitItem, Error> {
         if self.peek(Pub)? {
             return Err(Error::Parse(
                 format!("{} not permitted here", Pub.desc()),
@@ -636,7 +632,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn block(&mut self) -> Result<Block<'a, 'b>, Error<'a, 'b>> {
+    fn block(&mut self) -> Result<Block, Error> {
         let first = self.expect(LBrace)?;
         let mut stmts = Vec::new();
         while !self.peek(RBrace)? {
@@ -693,7 +689,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn local(&mut self) -> Result<Stmt<'a, 'b>, Error<'a, 'b>> {
+    fn local(&mut self) -> Result<Stmt, Error> {
         let first = self.expect(Let)?;
         let pattern = self.pattern()?;
 
@@ -719,11 +715,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn expr(
-        &mut self,
-        bp: BindingPower,
-        allow_struct: bool,
-    ) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
+    fn expr(&mut self, bp: BindingPower, allow_struct: bool) -> Result<Expr, Error> {
         macro_rules! literal {
             ($token:ident, $kind:ident) => {{
                 let span = self.expect($token)?.span;
@@ -873,9 +865,11 @@ impl<'a, 'b> Parser<'a, 'b> {
 
                 let range_span = if self.peek(Eq)? {
                     let last_span = self.expect(Eq)?.span;
-                    first_span.by(second_span)?.by(last_span)?
+                    first_span
+                        .by(second_span, self.tokens.code())?
+                        .by(last_span, self.tokens.code())?
                 } else {
-                    first_span.by(second_span)?
+                    first_span.by(second_span, self.tokens.code())?
                 };
 
                 if self.peek_kind()?.is_expr_start() {
@@ -1119,7 +1113,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(lhs)
     }
 
-    fn next_op(&mut self, bp: BindingPower) -> Result<Option<OpInfo<'a, 'b>>, Error<'a, 'b>> {
+    fn next_op(&mut self, bp: BindingPower) -> Result<Option<OpInfo>, Error> {
         macro_rules! assign_op {
             ($tok1:ident, $tok2:ident => $op:ident) => {{
                 if BindingPower::Assign < bp {
@@ -1128,7 +1122,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
                 let span1 = self.expect($tok1)?.span;
                 let span2 = self.expect($tok2)?.span;
-                let op_span = span1.by(span2)?;
+                let op_span = span1.by(span2, self.tokens.code())?;
                 Ok(Some(OpInfo::AssignOp {
                     op: AssignOp::$op,
                     op_span,
@@ -1143,7 +1137,9 @@ impl<'a, 'b> Parser<'a, 'b> {
                 let span1 = self.expect($tok1)?.span;
                 let span2 = self.expect($tok2)?.span;
                 let span3 = self.expect($tok3)?.span;
-                let op_span = span1.by(span2)?.by(span3)?;
+                let op_span = span1
+                    .by(span2, self.tokens.code())?
+                    .by(span3, self.tokens.code())?;
                 Ok(Some(OpInfo::AssignOp {
                     op: AssignOp::$op,
                     op_span,
@@ -1173,7 +1169,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
                 let first_span = self.expect($tok1)?.span;
                 let last_span = self.expect($tok2)?.span;
-                let op_span = first_span.by(last_span)?;
+                let op_span = first_span.by(last_span, self.tokens.code())?;
 
                 Ok(Some(OpInfo::BinOp {
                     op: BinOp::$op,
@@ -1259,12 +1255,14 @@ impl<'a, 'b> Parser<'a, 'b> {
             let first_span = self.expect(Dot)?.span;
             let second_span = self.expect(Dot)?.span;
             let last_span = self.expect(Eq)?.span;
-            let range_span = first_span.by(second_span)?.by(last_span)?;
+            let range_span = first_span
+                .by(second_span, self.tokens.code())?
+                .by(last_span, self.tokens.code())?;
             Ok(Some(OpInfo::Range { range_span }))
         } else if self.peek([Dot, Dot])? {
             let first_span = self.expect(Dot)?.span;
             let last_span = self.expect(Dot)?.span;
-            let range_span = first_span.by(last_span)?;
+            let range_span = first_span.by(last_span, self.tokens.code())?;
             Ok(Some(OpInfo::Range { range_span }))
         } else if self.peek(Dot)? {
             self.expect(Dot)?;
@@ -1278,7 +1276,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn paren_expr(&mut self) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
+    fn paren_expr(&mut self) -> Result<Expr, Error> {
         let first = self.expect(LParen)?;
         if self.peek(RParen)? {
             let last = self.expect(RParen)?;
@@ -1311,7 +1309,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(Expr::Tuple { exprs, span })
     }
 
-    fn brack_expr(&mut self) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
+    fn brack_expr(&mut self) -> Result<Expr, Error> {
         let first = self.expect(LBrack)?;
         if self.peek(RBrack)? {
             let last = self.expect(RBrack)?;
@@ -1346,7 +1344,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(Expr::Array { exprs, span })
     }
 
-    fn ident_expr(&mut self, allow_struct: bool) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
+    fn ident_expr(&mut self, allow_struct: bool) -> Result<Expr, Error> {
         let path = self.generic_path()?;
         if allow_struct && self.consume(LBrace)? {
             if self.peek(RBrace)? {
@@ -1375,12 +1373,12 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn generic_path(&mut self) -> Result<GenericPath<'a, 'b>, Error<'a, 'b>> {
+    fn generic_path(&mut self) -> Result<GenericPath, Error> {
         let mut segments = vec![self.generic_segment()?];
         while self.peek([Colon, Colon, Ident])? {
             let first_colon = self.expect(Colon)?;
             let last_colon = self.expect(Colon)?;
-            first_colon.span.by(last_colon.span)?;
+            first_colon.span.by(last_colon.span, self.tokens.code())?;
             segments.push(self.generic_segment()?);
         }
 
@@ -1388,12 +1386,12 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(GenericPath { segments, span })
     }
 
-    fn generic_segment(&mut self) -> Result<GenericSegment<'a, 'b>, Error<'a, 'b>> {
+    fn generic_segment(&mut self) -> Result<GenericSegment, Error> {
         let name = self.name()?;
         if self.peek([Colon, Colon, Lt])? {
             let first_colon = self.expect(Colon)?;
             let last_colon = self.expect(Colon)?;
-            first_colon.span.by(last_colon.span)?;
+            first_colon.span.by(last_colon.span, self.tokens.code())?;
             let generic_args = self.generic_args()?;
 
             let span = name.span.to(generic_args.span);
@@ -1412,7 +1410,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn expr_field(&mut self) -> Result<ExprField<'a, 'b>, Error<'a, 'b>> {
+    fn expr_field(&mut self) -> Result<ExprField, Error> {
         let name = self.name()?;
         if self.consume(Colon)? {
             let expr = self.expr(BindingPower::Start, true)?;
@@ -1424,7 +1422,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn if_expr(&mut self) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
+    fn if_expr(&mut self) -> Result<Expr, Error> {
         let first = self.expect(If)?;
         if self.consume(Let)? {
             let pattern = self.pattern()?;
@@ -1456,7 +1454,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn else_kind(&mut self, span: Span<'a, 'b>) -> Result<ElseKind<'a, 'b>, Error<'a, 'b>> {
+    fn else_kind(&mut self, span: Span) -> Result<ElseKind, Error> {
         if !self.peek(Else)? {
             return Ok(ElseKind::Nothing { span: span.after() });
         }
@@ -1498,7 +1496,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn while_expr(&mut self) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
+    fn while_expr(&mut self) -> Result<Expr, Error> {
         let first = self.expect(While)?;
         if self.consume(Let)? {
             let pattern = self.pattern()?;
@@ -1524,7 +1522,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn match_expr(&mut self) -> Result<Expr<'a, 'b>, Error<'a, 'b>> {
+    fn match_expr(&mut self) -> Result<Expr, Error> {
         let first = self.expect(Match)?;
         let expr = self.expr(BindingPower::Start, false)?;
         self.expect(LBrace)?;
@@ -1552,11 +1550,11 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn match_arm(&mut self) -> Result<MatchArm<'a, 'b>, Error<'a, 'b>> {
+    fn match_arm(&mut self) -> Result<MatchArm, Error> {
         let pattern = self.pattern()?;
         let eq = self.expect(Eq)?;
         let gt = self.expect(Gt)?;
-        eq.span.by(gt.span)?;
+        eq.span.by(gt.span, self.tokens.code())?;
         let body = self.expr(BindingPower::Start, true)?;
         if self.peek(RBrace)? {
             self.consume(Comma)?;
@@ -1572,17 +1570,14 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn label(&mut self) -> Result<Label<'a, 'b>, Error<'a, 'b>> {
+    fn label(&mut self) -> Result<Label, Error> {
         let first = self.expect(At)?;
         let name = self.name()?;
         let span = first.span.to(name.span);
         Ok(Label { name, span })
     }
 
-    fn extern_block(
-        &mut self,
-        pub_span: Option<Span<'a, 'b>>,
-    ) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+    fn extern_block(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
         self.disallow_pub(pub_span, Extern)?;
 
         let first = self.expect(Extern)?;
@@ -1597,7 +1592,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(Item::Extern { items, span })
     }
 
-    fn extern_item(&mut self) -> Result<ExternItem<'a, 'b>, Error<'a, 'b>> {
+    fn extern_item(&mut self) -> Result<ExternItem, Error> {
         let pub_span = if self.peek(Pub)? {
             Some(self.next()?.span)
         } else {
@@ -1668,7 +1663,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn signature(&mut self) -> Result<Signature<'a, 'b>, Error<'a, 'b>> {
+    fn signature(&mut self) -> Result<Signature, Error> {
         let first = self.expect(Fn)?;
         let name = self.name()?;
         let generic_params = if self.peek(Lt)? {
@@ -1688,13 +1683,13 @@ impl<'a, 'b> Parser<'a, 'b> {
             SelfKind::None
         };
 
-        let (params, dots) = self.params(!self_kind.is_none())?;
+        let (params, variadic) = self.params(!self_kind.is_none())?;
         let last_span = self.expect(RParen)?.span;
 
         let (ret, last_span) = if self.peek(Dash)? {
             let dash = self.expect(Dash)?;
             let gt = self.expect(Gt)?;
-            dash.span.by(gt.span)?;
+            dash.span.by(gt.span, self.tokens.code())?;
 
             let ty = self.ty()?;
             let span = ty.span();
@@ -1717,17 +1712,14 @@ impl<'a, 'b> Parser<'a, 'b> {
             generic_params,
             self_kind,
             params,
-            dots,
+            variadic,
             ret,
             where_clause,
             span,
         })
     }
 
-    fn params(
-        &mut self,
-        has_self_param: bool,
-    ) -> Result<(Vec<Param<'a, 'b>>, Option<Span<'a, 'b>>), Error<'a, 'b>> {
+    fn params(&mut self, has_self_param: bool) -> Result<(Vec<Param>, Option<Variadic>), Error> {
         if has_self_param && !self.peek(RParen)? {
             self.expect(Comma)?;
         }
@@ -1741,16 +1733,35 @@ impl<'a, 'b> Parser<'a, 'b> {
 
         if self.peek(RParen)? {
             return Ok((Vec::new(), None));
-        } else if self.peek(Dot)? {
-            let first = self.expect(Dot)?;
-            let second = self.expect(Dot)?;
-            let last = self.expect(Dot)?;
-            let span = first.span.by(second.span)?.by(last.span)?;
-            return Ok((Vec::new(), Some(span)));
         }
 
         let pattern = self.pattern()?;
         self.expect(Colon)?;
+
+        if self.peek(Dot)? {
+            let first = self.expect(Dot)?;
+            let second = self.expect(Dot)?;
+            let last = self.expect(Dot)?;
+            let dots = first
+                .span
+                .by(second.span, self.tokens.code())?
+                .by(last.span, self.tokens.code())?;
+
+            let name = match pattern.into_name() {
+                Ok(name) => name,
+                Err(span) => {
+                    return Err(Error::Parse(
+                        "variadic arguments cannot be deconstructed".to_string(),
+                        span,
+                        vec![],
+                    ))
+                }
+            };
+
+            let span = name.span.to(dots);
+            return Ok((Vec::new(), Some(Variadic { name, span })));
+        }
+
         let ty = self.ty()?;
         let span = pattern.span().to(ty.span());
 
@@ -1758,16 +1769,33 @@ impl<'a, 'b> Parser<'a, 'b> {
         while !self.peek(RParen)? && !self.peek([Comma, RParen])? {
             self.expect(Comma)?;
 
+            let pattern = self.pattern()?;
+            self.expect(Colon)?;
+
             if self.peek(Dot)? {
                 let first = self.expect(Dot)?;
                 let second = self.expect(Dot)?;
                 let last = self.expect(Dot)?;
-                let span = first.span.by(second.span)?.by(last.span)?;
-                return Ok((params, Some(span)));
+                let dots = first
+                    .span
+                    .by(second.span, self.tokens.code())?
+                    .by(last.span, self.tokens.code())?;
+
+                let name = match pattern.into_name() {
+                    Ok(name) => name,
+                    Err(span) => {
+                        return Err(Error::Parse(
+                            "variadic arguments cannot be deconstructed".to_string(),
+                            span,
+                            vec![],
+                        ))
+                    }
+                };
+
+                let span = name.span.to(dots);
+                return Ok((Vec::new(), Some(Variadic { name, span })));
             }
 
-            let pattern = self.pattern()?;
-            self.expect(Colon)?;
             let ty = self.ty()?;
             let span = pattern.span().to(ty.span());
             params.push(Param { pattern, ty, span });
@@ -1777,7 +1805,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok((params, None))
     }
 
-    fn pattern(&mut self) -> Result<Pattern<'a, 'b>, Error<'a, 'b>> {
+    fn pattern(&mut self) -> Result<Pattern, Error> {
         if self.peek(Under)? {
             let span = self.expect(Under)?.span;
             Ok(Pattern::Wild { span })
@@ -1826,7 +1854,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn struct_pattern(&mut self, path: Path<'a, 'b>) -> Result<Pattern<'a, 'b>, Error<'a, 'b>> {
+    fn struct_pattern(&mut self, path: Path) -> Result<Pattern, Error> {
         self.expect(LBrace)?;
         if self.peek(RBrace)? {
             let last = self.expect(RBrace)?;
@@ -1840,7 +1868,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         } else if self.peek(Dot)? {
             let first_dot = self.expect(Dot)?;
             let last_dot = self.expect(Dot)?;
-            let dots = first_dot.span.by(last_dot.span)?;
+            let dots = first_dot.span.by(last_dot.span, self.tokens.code())?;
             let last = self.expect(RBrace)?;
             let span = path.span.to(last.span);
             return Ok(Pattern::Struct {
@@ -1875,7 +1903,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn field_pattern(&mut self) -> Result<FieldPattern<'a, 'b>, Error<'a, 'b>> {
+    fn field_pattern(&mut self) -> Result<FieldPattern, Error> {
         let name = self.name()?;
         if self.consume(Colon)? {
             let pattern = self.pattern()?;
@@ -1886,18 +1914,16 @@ impl<'a, 'b> Parser<'a, 'b> {
                 span,
             })
         } else {
+            let span = name.span;
             Ok(FieldPattern {
                 name,
                 pattern: None,
-                span: name.span,
+                span,
             })
         }
     }
 
-    fn tuple_pattern(
-        &mut self,
-        allow_singleton: bool,
-    ) -> Result<(Vec<Pattern<'a, 'b>>, Span<'a, 'b>), Error<'a, 'b>> {
+    fn tuple_pattern(&mut self, allow_singleton: bool) -> Result<(Vec<Pattern>, Span), Error> {
         let first = self.expect(LParen)?;
         if self.peek(RParen)? {
             let last = self.expect(RParen)?;
@@ -1925,7 +1951,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok((tuple, span))
     }
 
-    fn where_clause(&mut self) -> Result<WhereClause<'a, 'b>, Error<'a, 'b>> {
+    fn where_clause(&mut self) -> Result<WhereClause, Error> {
         let first = self.expect(Where)?;
 
         let mut items = vec![self.where_item()?];
@@ -1937,47 +1963,32 @@ impl<'a, 'b> Parser<'a, 'b> {
         let last_span = if self.peek(Comma)? {
             self.expect(Comma)?.span
         } else {
-            items.last().unwrap().span()
+            items.last().unwrap().span
         };
 
         let span = first.span.to(last_span);
         Ok(WhereClause { items, span })
     }
 
-    fn where_item(&mut self) -> Result<WhereItem<'a, 'b>, Error<'a, 'b>> {
+    fn where_item(&mut self) -> Result<WhereItem, Error> {
         let param = self.name()?;
-        if self.consume(Colon)? {
-            let mut bounds = vec![self.trait_bound()?];
-            while self.peek(Plus)? {
-                self.expect(Plus)?;
-                bounds.push(self.trait_bound()?);
-            }
+        self.expect(Colon)?;
 
-            let span = param.span.to(bounds.last().unwrap().span());
-            Ok(WhereItem::Bound {
-                param,
-                bounds,
-                span,
-            })
-        } else if self.consume(Eq)? {
-            let ty = self.ty()?;
-            let span = param.span.to(ty.span());
-            Ok(WhereItem::Eq { param, ty, span })
-        } else {
-            Err(Error::Parse(
-                format!(
-                    "expected {} or {}, found {}",
-                    Colon.desc(),
-                    Eq.desc(),
-                    self.peek_kind()?.desc()
-                ),
-                self.peek_span()?,
-                vec![],
-            ))
+        let mut bounds = vec![self.trait_bound()?];
+        while self.peek(Plus)? {
+            self.expect(Plus)?;
+            bounds.push(self.trait_bound()?);
         }
+
+        let span = param.span.to(bounds.last().unwrap().span());
+        Ok(WhereItem {
+            param,
+            bounds,
+            span,
+        })
     }
 
-    fn trait_bound(&mut self) -> Result<TraitBound<'a, 'b>, Error<'a, 'b>> {
+    fn trait_bound(&mut self) -> Result<TraitBound, Error> {
         let path = self.path()?;
         if self.peek(Lt)? {
             let generic_args = self.generic_args()?;
@@ -2006,7 +2017,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             let (ret, last_span) = if self.peek(Dash)? {
                 let dash = self.expect(Dash)?;
                 let gt = self.expect(Gt)?;
-                dash.span.by(gt.span)?;
+                dash.span.by(gt.span, self.tokens.code())?;
 
                 let ret = self.ty()?;
                 let span = ret.span();
@@ -2032,7 +2043,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn fn_def(&mut self, pub_span: Option<Span<'a, 'b>>) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+    fn fn_def(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
         let signature = self.signature()?;
         let block = self.block()?;
 
@@ -2049,10 +2060,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn impl_block(
-        &mut self,
-        pub_span: Option<Span<'a, 'b>>,
-    ) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+    fn impl_block(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
         self.disallow_pub(pub_span, Impl)?;
 
         let first = self.expect(Impl)?;
@@ -2091,7 +2099,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn impl_fn(&mut self) -> Result<ImplFn<'a, 'b>, Error<'a, 'b>> {
+    fn impl_fn(&mut self) -> Result<ImplFn, Error> {
         let pub_span = if self.peek(Pub)? {
             Some(self.next()?.span)
         } else {
@@ -2115,7 +2123,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn const_def(&mut self, pub_span: Option<Span<'a, 'b>>) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+    fn const_def(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Const)?;
         let name = self.name()?;
         self.expect(Colon)?;
@@ -2134,10 +2142,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn static_decl(
-        &mut self,
-        pub_span: Option<Span<'a, 'b>>,
-    ) -> Result<Item<'a, 'b>, Error<'a, 'b>> {
+    fn static_decl(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Static)?;
         let name = self.name()?;
         self.expect(Colon)?;
@@ -2161,9 +2166,9 @@ impl<'a, 'b> Parser<'a, 'b> {
 
     fn handle_pub(
         &mut self,
-        pub_span: Option<Span<'a, 'b>>,
+        pub_span: Option<Span>,
         kind: TokenKind,
-    ) -> Result<(Span<'a, 'b>, bool), Error<'a, 'b>> {
+    ) -> Result<(Span, bool), Error> {
         if let Some(span) = pub_span {
             self.expect(kind)?;
             Ok((span, true))
@@ -2172,11 +2177,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn disallow_pub(
-        &mut self,
-        pub_span: Option<Span<'a, 'b>>,
-        kind: TokenKind,
-    ) -> Result<(), Error<'a, 'b>> {
+    fn disallow_pub(&mut self, pub_span: Option<Span>, kind: TokenKind) -> Result<(), Error> {
         if let Some(span) = pub_span {
             Err(Error::Parse(
                 format!("{} not permitted before {}", Pub.desc(), kind.desc()),
@@ -2188,15 +2189,14 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn name(&mut self) -> Result<Name<'a, 'b>, Error<'a, 'b>> {
+    fn name(&mut self) -> Result<Name, Error> {
         let token = self.expect(Ident)?;
-        Ok(Name {
-            name: token.span.text,
-            span: token.span,
-        })
+        let span = token.span;
+        let name = self.tokens.code()[span.start..span.end].to_string();
+        Ok(Name { name, span })
     }
 
-    fn path(&mut self) -> Result<Path<'a, 'b>, Error<'a, 'b>> {
+    fn path(&mut self) -> Result<Path, Error> {
         let mut path = vec![self.name()?];
         while self.peek([Colon, Colon, Ident])? {
             self.expect(Colon)?;
@@ -2259,16 +2259,16 @@ enum BindingPower {
     Prefix,
 }
 
-enum OpInfo<'a, 'b> {
+enum OpInfo {
     BinOp {
         op: BinOp,
-        op_span: Span<'a, 'b>,
+        op_span: Span,
         bp: BindingPower,
         is_cmp: bool,
     },
     AssignOp {
         op: AssignOp,
-        op_span: Span<'a, 'b>,
+        op_span: Span,
     },
     Assign,
     Call,
@@ -2277,9 +2277,9 @@ enum OpInfo<'a, 'b> {
     Field,
     Cast,
     Range {
-        range_span: Span<'a, 'b>,
+        range_span: Span,
     },
     Try {
-        qmark_span: Span<'a, 'b>,
+        qmark_span: Span,
     },
 }

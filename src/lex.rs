@@ -2,34 +2,41 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 use crate::error::{Error, Note};
+use crate::io::FileId;
 use crate::span::{Location, Span};
 
 #[derive(Clone, Copy, Debug)]
-pub struct Token<'a, 'b> {
+pub struct Token {
     pub kind: TokenKind,
-    pub span: Span<'a, 'b>,
+    pub span: Span,
 }
 
-pub struct Tokens<'a, 'b> {
+pub struct Tokens<'a> {
     suffix: &'a str,
     code: &'a str,
+    start: usize,
     line: usize,
     column: usize,
-    file: &'b str,
+    file_id: FileId,
 }
 
-impl<'a, 'b> Tokens<'a, 'b> {
-    pub fn new(code: &'a str, file: &'b str) -> Self {
+impl<'a> Tokens<'a> {
+    pub fn new(code: &'a str, file_id: FileId) -> Self {
         Tokens {
             suffix: code,
             code,
+            start: 0,
             line: 0,
             column: 0,
-            file,
+            file_id,
         }
     }
 
-    pub fn next(&mut self) -> Result<Token<'a, 'b>, Error<'a, 'b>> {
+    pub fn code(&self) -> &str {
+        self.code
+    }
+
+    pub fn next(&mut self) -> Result<Token, Error> {
         self.skip_whitespace();
         if self.suffix.is_empty() {
             Ok(Token {
@@ -41,21 +48,19 @@ impl<'a, 'b> Tokens<'a, 'b> {
         }
     }
 
-    fn make_span(&mut self, len: usize) -> Span<'a, 'b> {
+    fn make_span(&mut self, len: usize) -> Span {
         let location = Location {
             line: self.line,
             column: self.column,
-            file: self.file,
+            file_id: self.file_id,
         };
         let span = Span {
-            text: &self.suffix[..len],
-            code: self.code,
+            start: self.start,
+            end: self.start + len,
             location,
         };
 
-        self.suffix = &self.suffix[len..];
-
-        for c in span.text.chars() {
+        for c in self.suffix[..len].chars() {
             if c == '\n' {
                 self.line += 1;
                 self.column = 0;
@@ -63,6 +68,9 @@ impl<'a, 'b> Tokens<'a, 'b> {
                 self.column += 1;
             }
         }
+
+        self.suffix = &self.suffix[len..];
+        self.start += len;
 
         span
     }
@@ -75,7 +83,7 @@ impl<'a, 'b> Tokens<'a, 'b> {
         self.make_span(len);
     }
 
-    fn next_token(&mut self) -> Result<Token<'a, 'b>, Error<'a, 'b>> {
+    fn next_token(&mut self) -> Result<Token, Error> {
         macro_rules! token {
             ($kind:ident) => {
                 Ok(Token {
@@ -95,8 +103,7 @@ impl<'a, 'b> Tokens<'a, 'b> {
                 len += self.suffix[len..].chars().next().unwrap().len_utf8();
             }
 
-            let span = self.make_span(len);
-            let kind = match span.text {
+            let kind = match &self.suffix[..len] {
                 "and" => TokenKind::And,
                 "as" => TokenKind::As,
                 "break" => TokenKind::Break,
@@ -136,12 +143,13 @@ impl<'a, 'b> Tokens<'a, 'b> {
                 name if name.chars().all(|c| c == '_') => {
                     return Err(Error::Lex(
                         format!("illegal identifier `{}`", name),
-                        span,
+                        self.make_span(len),
                         vec![],
                     ))
                 }
                 _ => TokenKind::Ident,
             };
+            let span = self.make_span(len);
 
             Ok(Token { kind, span })
         } else if self.suffix.starts_with(';') {
@@ -225,7 +233,7 @@ impl<'a, 'b> Tokens<'a, 'b> {
         }
     }
 
-    fn lex_number(&mut self) -> Result<Token<'a, 'b>, Error<'a, 'b>> {
+    fn lex_number(&mut self) -> Result<Token, Error> {
         lazy_static! {
             static ref NUMBER: Regex = Regex::new(
                 r"\A-?\d+(\.\d+)?([Ee][+-]?\d+)?(_?\p{Alphabetic}[\p{Alphabetic}0-9]*)?"
@@ -240,10 +248,11 @@ impl<'a, 'b> Tokens<'a, 'b> {
         ];
 
         let len = NUMBER.find(self.suffix).unwrap().end();
+        let text = &self.suffix[..len];
+        let is_float = text.chars().any(|c| ".eE".contains(c));
         let span = self.make_span(len);
-        let is_float = span.text.chars().any(|c| ".eE".contains(c));
 
-        if let Some(mat) = SUFFIX.find(span.text) {
+        if let Some(mat) = SUFFIX.find(text) {
             if let Some(suffix) = SUFFIXES.into_iter().find(|s| s == &mat.as_str()) {
                 if suffix.ends_with("f32") || suffix.ends_with("f64") {
                     Ok(Token {
@@ -298,7 +307,7 @@ impl<'a, 'b> Tokens<'a, 'b> {
         }
     }
 
-    fn lex_char(&mut self) -> Result<Token<'a, 'b>, Error<'a, 'b>> {
+    fn lex_char(&mut self) -> Result<Token, Error> {
         if let Some(len) = self.lex_char_or_escape(&self.suffix[1..], 1, '\'', false)? {
             if self.suffix[1 + len..].starts_with('\'') {
                 Ok(Token {
@@ -321,7 +330,7 @@ impl<'a, 'b> Tokens<'a, 'b> {
         }
     }
 
-    fn lex_string(&mut self) -> Result<Token<'a, 'b>, Error<'a, 'b>> {
+    fn lex_string(&mut self) -> Result<Token, Error> {
         let mut len = 1;
         while let Some(l) = self.lex_char_or_escape(&self.suffix[len..], len, '"', false)? {
             len += l;
@@ -333,7 +342,7 @@ impl<'a, 'b> Tokens<'a, 'b> {
         })
     }
 
-    fn lex_byte(&mut self) -> Result<Token<'a, 'b>, Error<'a, 'b>> {
+    fn lex_byte(&mut self) -> Result<Token, Error> {
         if let Some(len) = self.lex_char_or_escape(&self.suffix[2..], 2, '\'', true)? {
             if self.suffix[2 + len..].starts_with('\'') {
                 Ok(Token {
@@ -356,7 +365,7 @@ impl<'a, 'b> Tokens<'a, 'b> {
         }
     }
 
-    fn lex_byte_string(&mut self) -> Result<Token<'a, 'b>, Error<'a, 'b>> {
+    fn lex_byte_string(&mut self) -> Result<Token, Error> {
         let mut len = 2;
         while let Some(l) = self.lex_char_or_escape(&self.suffix[len..], len, '"', true)? {
             len += l;
@@ -374,7 +383,7 @@ impl<'a, 'b> Tokens<'a, 'b> {
         len: usize,
         end: char,
         byte: bool,
-    ) -> Result<Option<usize>, Error<'a, 'b>> {
+    ) -> Result<Option<usize>, Error> {
         let unterminated_msg = if end == '"' {
             "unterminated string literal"
         } else {
@@ -435,7 +444,7 @@ impl<'a, 'b> Tokens<'a, 'b> {
         len: usize,
         escape: char,
         byte: bool,
-    ) -> Result<(), Error<'a, 'b>> {
+    ) -> Result<(), Error> {
         for i in 0..n {
             if !suffix[(2 + i)..].starts_with(|c: char| c.is_ascii_hexdigit()) {
                 let offset = if suffix.len() > 2 + i { 3 } else { 2 };

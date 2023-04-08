@@ -2,63 +2,62 @@ use std::fmt::{self, Debug};
 
 use crate::span::Span;
 
-#[derive(Clone, Copy)]
-pub struct Name<'a, 'b> {
-    pub name: &'a str,
-    pub span: Span<'a, 'b>,
+pub struct Name {
+    pub name: String,
+    pub span: Span,
 }
 
-impl Debug for Name<'_, '_> {
+impl Debug for Name {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Name({:?})", self.name)
     }
 }
 
 #[derive(Debug)]
-pub struct Path<'a, 'b> {
-    pub path: Vec<Name<'a, 'b>>,
-    pub span: Span<'a, 'b>,
+pub struct Path {
+    pub path: Vec<Name>,
+    pub span: Span,
 }
 
 #[derive(Debug)]
-pub enum Ty<'a, 'b> {
+pub enum Ty {
     Path {
-        path: Path<'a, 'b>,
-        generic_args: Option<GenericArgs<'a, 'b>>,
-        span: Span<'a, 'b>,
+        path: Path,
+        generic_args: Option<GenericArgs>,
+        span: Span,
     },
     Ptr {
-        ty: Box<Ty<'a, 'b>>,
-        span: Span<'a, 'b>,
+        ty: Box<Ty>,
+        span: Span,
     },
     Tuple {
-        tys: Vec<Ty<'a, 'b>>,
-        span: Span<'a, 'b>,
+        tys: Vec<Ty>,
+        span: Span,
     },
     Slice {
-        ty: Box<Ty<'a, 'b>>,
-        span: Span<'a, 'b>,
+        ty: Box<Ty>,
+        span: Span,
     },
     Array {
-        ty: Box<Ty<'a, 'b>>,
-        count: Span<'a, 'b>,
-        span: Span<'a, 'b>,
+        ty: Box<Ty>,
+        count: Span,
+        span: Span,
     },
     Fn {
-        params: Vec<Ty<'a, 'b>>,
-        ret: Option<Box<Ty<'a, 'b>>>,
-        span: Span<'a, 'b>,
+        params: Vec<Ty>,
+        ret: Option<Box<Ty>>,
+        span: Span,
     },
     SelfType {
-        span: Span<'a, 'b>,
+        span: Span,
     },
     Never {
-        span: Span<'a, 'b>,
+        span: Span,
     },
 }
 
-impl<'a, 'b> Ty<'a, 'b> {
-    pub fn span(&self) -> Span<'a, 'b> {
+impl Ty {
+    pub fn span(&self) -> Span {
         match self {
             Ty::Path { span, .. }
             | Ty::Ptr { span, .. }
@@ -73,88 +72,88 @@ impl<'a, 'b> Ty<'a, 'b> {
 }
 
 #[derive(Debug)]
-pub struct GenericArgs<'a, 'b> {
-    pub args: Vec<Ty<'a, 'b>>,
-    pub span: Span<'a, 'b>,
+pub struct GenericArgs {
+    pub args: Vec<Ty>,
+    pub span: Span,
 }
 
 #[derive(Debug)]
-pub enum Item<'a, 'b> {
+pub enum Item {
     Use {
-        tree: UseTree<'a, 'b>,
-        span: Span<'a, 'b>,
+        tree: UseTree,
+        span: Span,
     },
     Struct {
         is_pub: bool,
-        name: Name<'a, 'b>,
-        generic_params: Option<GenericParams<'a, 'b>>,
-        fields: Vec<StructField<'a, 'b>>,
-        span: Span<'a, 'b>,
+        name: Name,
+        generic_params: Option<GenericParams>,
+        fields: Vec<StructField>,
+        span: Span,
     },
     Enum {
         is_pub: bool,
-        name: Name<'a, 'b>,
-        generic_params: Option<GenericParams<'a, 'b>>,
-        items: Vec<EnumItem<'a, 'b>>,
-        span: Span<'a, 'b>,
+        name: Name,
+        generic_params: Option<GenericParams>,
+        items: Vec<EnumItem>,
+        span: Span,
     },
     Type {
         is_pub: bool,
-        name: Name<'a, 'b>,
-        generic_params: Option<GenericParams<'a, 'b>>,
-        ty: Ty<'a, 'b>,
-        span: Span<'a, 'b>,
+        name: Name,
+        generic_params: Option<GenericParams>,
+        ty: Ty,
+        span: Span,
     },
     Mod {
         is_pub: bool,
-        name: Name<'a, 'b>,
-        span: Span<'a, 'b>,
+        name: Name,
+        span: Span,
     },
     Extern {
-        items: Vec<ExternItem<'a, 'b>>,
-        span: Span<'a, 'b>,
+        items: Vec<ExternItem>,
+        span: Span,
     },
     Trait {
         is_pub: bool,
-        name: Name<'a, 'b>,
-        generic_params: Option<GenericParams<'a, 'b>>,
-        self_bounds: Vec<TraitBound<'a, 'b>>,
-        where_clause: Option<WhereClause<'a, 'b>>,
-        items: Vec<TraitItem<'a, 'b>>,
-        span: Span<'a, 'b>,
+        name: Name,
+        generic_params: Option<GenericParams>,
+        self_bounds: Vec<TraitBound>,
+        where_clause: Option<WhereClause>,
+        items: Vec<TraitItem>,
+        span: Span,
     },
     Fn {
         is_pub: bool,
-        signature: Signature<'a, 'b>,
-        block: Block<'a, 'b>,
-        span: Span<'a, 'b>,
+        signature: Signature,
+        block: Block,
+        span: Span,
     },
     Impl {
-        name: Name<'a, 'b>,
-        generic_params: Option<GenericParams<'a, 'b>>,
-        as_trait: Option<TraitBound<'a, 'b>>,
-        where_clause: Option<WhereClause<'a, 'b>>,
-        fns: Vec<ImplFn<'a, 'b>>,
-        span: Span<'a, 'b>,
+        name: Name,
+        generic_params: Option<GenericParams>,
+        as_trait: Option<TraitBound>,
+        where_clause: Option<WhereClause>,
+        fns: Vec<ImplFn>,
+        span: Span,
     },
     Const {
         is_pub: bool,
-        name: Name<'a, 'b>,
-        ty: Ty<'a, 'b>,
-        expr: Expr<'a, 'b>,
-        span: Span<'a, 'b>,
+        name: Name,
+        ty: Ty,
+        expr: Expr,
+        span: Span,
     },
     Static {
         is_pub: bool,
-        name: Name<'a, 'b>,
-        ty: Ty<'a, 'b>,
-        expr: Option<Expr<'a, 'b>>,
-        span: Span<'a, 'b>,
+        name: Name,
+        ty: Ty,
+        expr: Option<Expr>,
+        span: Span,
     },
 }
 
-impl<'a, 'b> Item<'a, 'b> {
-    pub fn span(&self) -> Span<'a, 'b> {
+impl Item {
+    pub fn span(&self) -> Span {
         match self {
             Item::Use { span, .. }
             | Item::Struct { span, .. }
@@ -172,56 +171,56 @@ impl<'a, 'b> Item<'a, 'b> {
 }
 
 #[derive(Debug)]
-pub struct UseTree<'a, 'b> {
-    pub prefix: Path<'a, 'b>,
-    pub kind: UseTreeKind<'a, 'b>,
-    pub span: Span<'a, 'b>,
+pub struct UseTree {
+    pub prefix: Path,
+    pub kind: UseTreeKind,
+    pub span: Span,
 }
 
 #[derive(Debug)]
-pub enum UseTreeKind<'a, 'b> {
+pub enum UseTreeKind {
     Simple,
-    Rename(Name<'a, 'b>),
-    Nested(Vec<UseTree<'a, 'b>>),
+    Rename(Name),
+    Nested(Vec<UseTree>),
 }
 
 #[derive(Debug)]
-pub struct StructField<'a, 'b> {
+pub struct StructField {
     pub is_pub: bool,
-    pub name: Name<'a, 'b>,
-    pub ty: Ty<'a, 'b>,
-    pub span: Span<'a, 'b>,
+    pub name: Name,
+    pub ty: Ty,
+    pub span: Span,
 }
 
 #[derive(Debug)]
-pub struct EnumItem<'a, 'b> {
-    pub name: Name<'a, 'b>,
-    pub tuple: Option<Vec<Ty<'a, 'b>>>,
-    pub span: Span<'a, 'b>,
+pub struct EnumItem {
+    pub name: Name,
+    pub tuple: Option<Vec<Ty>>,
+    pub span: Span,
 }
 
 #[derive(Debug)]
-pub enum ExternItem<'a, 'b> {
+pub enum ExternItem {
     Fn {
         is_pub: bool,
-        signature: Signature<'a, 'b>,
-        span: Span<'a, 'b>,
+        signature: Signature,
+        span: Span,
     },
     Type {
         is_pub: bool,
-        name: Name<'a, 'b>,
-        span: Span<'a, 'b>,
+        name: Name,
+        span: Span,
     },
     Static {
         is_pub: bool,
-        name: Name<'a, 'b>,
-        ty: Ty<'a, 'b>,
-        span: Span<'a, 'b>,
+        name: Name,
+        ty: Ty,
+        span: Span,
     },
 }
 
-impl<'a, 'b> ExternItem<'a, 'b> {
-    pub fn span(&self) -> Span<'a, 'b> {
+impl ExternItem {
+    pub fn span(&self) -> Span {
         match self {
             ExternItem::Fn { span, .. }
             | ExternItem::Type { span, .. }
@@ -231,32 +230,32 @@ impl<'a, 'b> ExternItem<'a, 'b> {
 }
 
 #[derive(Debug)]
-pub struct Signature<'a, 'b> {
-    pub name: Name<'a, 'b>,
-    pub generic_params: Option<GenericParams<'a, 'b>>,
-    pub self_kind: SelfKind<'a, 'b>,
-    pub params: Vec<Param<'a, 'b>>,
-    pub dots: Option<Span<'a, 'b>>,
-    pub ret: Option<Ty<'a, 'b>>,
-    pub where_clause: Option<WhereClause<'a, 'b>>,
-    pub span: Span<'a, 'b>,
+pub struct Signature {
+    pub name: Name,
+    pub generic_params: Option<GenericParams>,
+    pub self_kind: SelfKind,
+    pub params: Vec<Param>,
+    pub variadic: Option<Variadic>,
+    pub ret: Option<Ty>,
+    pub where_clause: Option<WhereClause>,
+    pub span: Span,
 }
 
 #[derive(Debug)]
-pub struct GenericParams<'a, 'b> {
-    pub params: Vec<Name<'a, 'b>>,
-    pub span: Span<'a, 'b>,
+pub struct GenericParams {
+    pub params: Vec<Name>,
+    pub span: Span,
 }
 
 #[derive(Debug)]
-pub enum SelfKind<'a, 'b> {
-    Ptr(Span<'a, 'b>),
-    Value(Span<'a, 'b>),
+pub enum SelfKind {
+    Ptr(Span),
+    Value(Span),
     None,
 }
 
-impl<'a, 'b> SelfKind<'a, 'b> {
-    pub fn span(&self) -> Option<Span<'a, 'b>> {
+impl SelfKind {
+    pub fn span(&self) -> Option<Span> {
         match self {
             SelfKind::Ptr(span) | SelfKind::Value(span) => Some(*span),
             SelfKind::None => None,
@@ -269,57 +268,48 @@ impl<'a, 'b> SelfKind<'a, 'b> {
 }
 
 #[derive(Debug)]
-pub struct Param<'a, 'b> {
-    pub pattern: Pattern<'a, 'b>,
-    pub ty: Ty<'a, 'b>,
-    pub span: Span<'a, 'b>,
+pub struct Param {
+    pub pattern: Pattern,
+    pub ty: Ty,
+    pub span: Span,
 }
 
 #[derive(Debug)]
-pub struct WhereClause<'a, 'b> {
-    pub items: Vec<WhereItem<'a, 'b>>,
-    pub span: Span<'a, 'b>,
+pub struct Variadic {
+    pub name: Name,
+    pub span: Span,
 }
 
 #[derive(Debug)]
-pub enum WhereItem<'a, 'b> {
-    Bound {
-        param: Name<'a, 'b>,
-        bounds: Vec<TraitBound<'a, 'b>>,
-        span: Span<'a, 'b>,
-    },
-    Eq {
-        param: Name<'a, 'b>,
-        ty: Ty<'a, 'b>,
-        span: Span<'a, 'b>,
-    },
-}
-
-impl<'a, 'b> WhereItem<'a, 'b> {
-    pub fn span(&self) -> Span<'a, 'b> {
-        match self {
-            WhereItem::Bound { span, .. } | WhereItem::Eq { span, .. } => *span,
-        }
-    }
+pub struct WhereClause {
+    pub items: Vec<WhereItem>,
+    pub span: Span,
 }
 
 #[derive(Debug)]
-pub enum TraitBound<'a, 'b> {
+pub struct WhereItem {
+    pub param: Name,
+    pub bounds: Vec<TraitBound>,
+    pub span: Span,
+}
+
+#[derive(Debug)]
+pub enum TraitBound {
     Trait {
-        path: Path<'a, 'b>,
-        generic_args: Option<GenericArgs<'a, 'b>>,
-        span: Span<'a, 'b>,
+        path: Path,
+        generic_args: Option<GenericArgs>,
+        span: Span,
     },
     Fn {
-        path: Path<'a, 'b>,
-        params: Vec<Ty<'a, 'b>>,
-        ret: Option<Ty<'a, 'b>>,
-        span: Span<'a, 'b>,
+        path: Path,
+        params: Vec<Ty>,
+        ret: Option<Ty>,
+        span: Span,
     },
 }
 
-impl<'a, 'b> TraitBound<'a, 'b> {
-    pub fn span(&self) -> Span<'a, 'b> {
+impl TraitBound {
+    pub fn span(&self) -> Span {
         match self {
             TraitBound::Trait { span, .. } | TraitBound::Fn { span, .. } => *span,
         }
@@ -327,20 +317,20 @@ impl<'a, 'b> TraitBound<'a, 'b> {
 }
 
 #[derive(Debug)]
-pub enum TraitItem<'a, 'b> {
+pub enum TraitItem {
     Required {
-        signature: Signature<'a, 'b>,
-        span: Span<'a, 'b>,
+        signature: Signature,
+        span: Span,
     },
     Provided {
-        signature: Signature<'a, 'b>,
-        block: Block<'a, 'b>,
-        span: Span<'a, 'b>,
+        signature: Signature,
+        block: Block,
+        span: Span,
     },
 }
 
-impl<'a, 'b> TraitItem<'a, 'b> {
-    pub fn span(&self) -> Span<'a, 'b> {
+impl TraitItem {
+    pub fn span(&self) -> Span {
         match self {
             TraitItem::Required { span, .. } | TraitItem::Provided { span, .. } => *span,
         }
@@ -348,32 +338,32 @@ impl<'a, 'b> TraitItem<'a, 'b> {
 }
 
 #[derive(Debug)]
-pub struct Block<'a, 'b> {
-    pub stmts: Vec<Stmt<'a, 'b>>,
-    pub expr: Option<Box<Expr<'a, 'b>>>,
-    pub span: Span<'a, 'b>,
+pub struct Block {
+    pub stmts: Vec<Stmt>,
+    pub expr: Option<Box<Expr>>,
+    pub span: Span,
 }
 
 #[derive(Debug)]
-pub enum Stmt<'a, 'b> {
+pub enum Stmt {
     Local {
-        pattern: Pattern<'a, 'b>,
-        ty: Option<Ty<'a, 'b>>,
-        expr: Option<Expr<'a, 'b>>,
-        span: Span<'a, 'b>,
+        pattern: Pattern,
+        ty: Option<Ty>,
+        expr: Option<Expr>,
+        span: Span,
     },
     Item {
-        item: Item<'a, 'b>,
-        span: Span<'a, 'b>,
+        item: Item,
+        span: Span,
     },
     Expr {
-        expr: Expr<'a, 'b>,
-        span: Span<'a, 'b>,
+        expr: Expr,
+        span: Span,
     },
 }
 
-impl<'a, 'b> Stmt<'a, 'b> {
-    pub fn span(&self) -> Span<'a, 'b> {
+impl Stmt {
+    pub fn span(&self) -> Span {
         match self {
             Stmt::Local { span, .. } | Stmt::Item { span, .. } | Stmt::Expr { span, .. } => *span,
         }
@@ -381,173 +371,173 @@ impl<'a, 'b> Stmt<'a, 'b> {
 }
 
 #[derive(Debug)]
-pub enum Expr<'a, 'b> {
+pub enum Expr {
     Array {
-        exprs: Vec<Expr<'a, 'b>>,
-        span: Span<'a, 'b>,
+        exprs: Vec<Expr>,
+        span: Span,
     },
     Call {
-        func: Box<Expr<'a, 'b>>,
-        args: Vec<Expr<'a, 'b>>,
-        span: Span<'a, 'b>,
+        func: Box<Expr>,
+        args: Vec<Expr>,
+        span: Span,
     },
     MethodCall {
-        receiver: Box<Expr<'a, 'b>>,
-        name: GenericSegment<'a, 'b>,
-        args: Vec<Expr<'a, 'b>>,
-        span: Span<'a, 'b>,
+        receiver: Box<Expr>,
+        name: GenericSegment,
+        args: Vec<Expr>,
+        span: Span,
     },
     Tuple {
-        exprs: Vec<Expr<'a, 'b>>,
-        span: Span<'a, 'b>,
+        exprs: Vec<Expr>,
+        span: Span,
     },
     Binary {
         op: BinOp,
-        lhs: Box<Expr<'a, 'b>>,
-        rhs: Box<Expr<'a, 'b>>,
-        op_span: Span<'a, 'b>,
-        span: Span<'a, 'b>,
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
+        op_span: Span,
+        span: Span,
     },
     Unary {
         op: UnOp,
-        expr: Box<Expr<'a, 'b>>,
-        op_span: Span<'a, 'b>,
-        span: Span<'a, 'b>,
+        expr: Box<Expr>,
+        op_span: Span,
+        span: Span,
     },
     Literal {
         kind: LiteralKind,
-        span: Span<'a, 'b>,
+        span: Span,
     },
     SelfValue {
-        span: Span<'a, 'b>,
+        span: Span,
     },
     Cast {
-        expr: Box<Expr<'a, 'b>>,
-        ty: Ty<'a, 'b>,
-        span: Span<'a, 'b>,
+        expr: Box<Expr>,
+        ty: Ty,
+        span: Span,
     },
     If {
-        test: Box<Expr<'a, 'b>>,
-        block: Block<'a, 'b>,
-        else_kind: ElseKind<'a, 'b>,
-        span: Span<'a, 'b>,
+        test: Box<Expr>,
+        block: Block,
+        else_kind: ElseKind,
+        span: Span,
     },
     IfLet {
-        pattern: Pattern<'a, 'b>,
-        expr: Box<Expr<'a, 'b>>,
-        block: Block<'a, 'b>,
-        else_kind: ElseKind<'a, 'b>,
-        span: Span<'a, 'b>,
+        pattern: Pattern,
+        expr: Box<Expr>,
+        block: Block,
+        else_kind: ElseKind,
+        span: Span,
     },
     While {
-        test: Box<Expr<'a, 'b>>,
-        block: Block<'a, 'b>,
-        span: Span<'a, 'b>,
+        test: Box<Expr>,
+        block: Block,
+        span: Span,
     },
     WhileLet {
-        pattern: Pattern<'a, 'b>,
-        expr: Box<Expr<'a, 'b>>,
-        block: Block<'a, 'b>,
-        span: Span<'a, 'b>,
+        pattern: Pattern,
+        expr: Box<Expr>,
+        block: Block,
+        span: Span,
     },
     Match {
-        expr: Box<Expr<'a, 'b>>,
-        arms: Vec<MatchArm<'a, 'b>>,
-        span: Span<'a, 'b>,
+        expr: Box<Expr>,
+        arms: Vec<MatchArm>,
+        span: Span,
     },
     Block {
-        block: Block<'a, 'b>,
-        span: Span<'a, 'b>,
+        block: Block,
+        span: Span,
     },
     For {
-        pattern: Pattern<'a, 'b>,
-        iter: Box<Expr<'a, 'b>>,
-        block: Block<'a, 'b>,
-        span: Span<'a, 'b>,
+        pattern: Pattern,
+        iter: Box<Expr>,
+        block: Block,
+        span: Span,
     },
     Loop {
-        block: Block<'a, 'b>,
-        span: Span<'a, 'b>,
+        block: Block,
+        span: Span,
     },
     TryBlock {
-        block: Block<'a, 'b>,
-        span: Span<'a, 'b>,
+        block: Block,
+        span: Span,
     },
     Label {
-        label: Label<'a, 'b>,
-        span: Span<'a, 'b>,
+        label: Label,
+        span: Span,
     },
     Goto {
-        label: Label<'a, 'b>,
-        expr: Option<Box<Expr<'a, 'b>>>,
-        span: Span<'a, 'b>,
+        label: Label,
+        expr: Option<Box<Expr>>,
+        span: Span,
     },
     Try {
-        expr: Box<Expr<'a, 'b>>,
-        qmark_span: Span<'a, 'b>,
-        span: Span<'a, 'b>,
+        expr: Box<Expr>,
+        qmark_span: Span,
+        span: Span,
     },
     Assign {
-        target: Box<Expr<'a, 'b>>,
-        rhs: Box<Expr<'a, 'b>>,
-        span: Span<'a, 'b>,
+        target: Box<Expr>,
+        rhs: Box<Expr>,
+        span: Span,
     },
     AssignOp {
         op: AssignOp,
-        target: Box<Expr<'a, 'b>>,
-        rhs: Box<Expr<'a, 'b>>,
-        op_span: Span<'a, 'b>,
-        span: Span<'a, 'b>,
+        target: Box<Expr>,
+        rhs: Box<Expr>,
+        op_span: Span,
+        span: Span,
     },
     Field {
-        expr: Box<Expr<'a, 'b>>,
-        name: Name<'a, 'b>,
-        span: Span<'a, 'b>,
+        expr: Box<Expr>,
+        name: Name,
+        span: Span,
     },
     Index {
-        expr: Box<Expr<'a, 'b>>,
-        index: Box<Expr<'a, 'b>>,
-        span: Span<'a, 'b>,
+        expr: Box<Expr>,
+        index: Box<Expr>,
+        span: Span,
     },
     Range {
-        low: Option<Box<Expr<'a, 'b>>>,
-        high: Option<Box<Expr<'a, 'b>>>,
-        range_span: Span<'a, 'b>,
-        span: Span<'a, 'b>,
+        low: Option<Box<Expr>>,
+        high: Option<Box<Expr>>,
+        range_span: Span,
+        span: Span,
     },
     Path {
-        path: GenericPath<'a, 'b>,
-        span: Span<'a, 'b>,
+        path: GenericPath,
+        span: Span,
     },
     Break {
-        expr: Option<Box<Expr<'a, 'b>>>,
-        span: Span<'a, 'b>,
+        expr: Option<Box<Expr>>,
+        span: Span,
     },
     Continue {
-        span: Span<'a, 'b>,
+        span: Span,
     },
     Return {
-        expr: Option<Box<Expr<'a, 'b>>>,
-        span: Span<'a, 'b>,
+        expr: Option<Box<Expr>>,
+        span: Span,
     },
     Struct {
-        path: GenericPath<'a, 'b>,
-        fields: Vec<ExprField<'a, 'b>>,
-        span: Span<'a, 'b>,
+        path: GenericPath,
+        fields: Vec<ExprField>,
+        span: Span,
     },
     Repeat {
-        expr: Box<Expr<'a, 'b>>,
-        count: Span<'a, 'b>,
-        span: Span<'a, 'b>,
+        expr: Box<Expr>,
+        count: Span,
+        span: Span,
     },
     Paren {
-        expr: Box<Expr<'a, 'b>>,
-        span: Span<'a, 'b>,
+        expr: Box<Expr>,
+        span: Span,
     },
 }
 
-impl<'a, 'b> Expr<'a, 'b> {
-    pub fn span(&self) -> Span<'a, 'b> {
+impl Expr {
+    pub fn span(&self) -> Span {
         match self {
             Expr::Array { span, .. }
             | Expr::Call { span, .. }
@@ -620,23 +610,23 @@ impl<'a, 'b> Expr<'a, 'b> {
 }
 
 #[derive(Debug)]
-pub struct GenericPath<'a, 'b> {
-    pub segments: Vec<GenericSegment<'a, 'b>>,
-    pub span: Span<'a, 'b>,
+pub struct GenericPath {
+    pub segments: Vec<GenericSegment>,
+    pub span: Span,
 }
 
 #[derive(Debug)]
-pub struct GenericSegment<'a, 'b> {
-    pub name: Name<'a, 'b>,
-    pub generic_args: Option<GenericArgs<'a, 'b>>,
-    pub span: Span<'a, 'b>,
+pub struct GenericSegment {
+    pub name: Name,
+    pub generic_args: Option<GenericArgs>,
+    pub span: Span,
 }
 
 #[derive(Debug)]
-pub struct MatchArm<'a, 'b> {
-    pub pattern: Pattern<'a, 'b>,
-    pub body: Expr<'a, 'b>,
-    pub span: Span<'a, 'b>,
+pub struct MatchArm {
+    pub pattern: Pattern,
+    pub body: Expr,
+    pub span: Span,
 }
 
 #[derive(Debug)]
@@ -696,37 +686,37 @@ pub enum AssignOp {
 }
 
 #[derive(Debug)]
-pub struct Label<'a, 'b> {
-    pub name: Name<'a, 'b>,
-    pub span: Span<'a, 'b>,
+pub struct Label {
+    pub name: Name,
+    pub span: Span,
 }
 
 #[derive(Debug)]
-pub enum ElseKind<'a, 'b> {
+pub enum ElseKind {
     Else {
-        block: Block<'a, 'b>,
-        span: Span<'a, 'b>,
+        block: Block,
+        span: Span,
     },
     ElseIf {
-        test: Box<Expr<'a, 'b>>,
-        block: Block<'a, 'b>,
-        else_kind: Box<ElseKind<'a, 'b>>,
-        span: Span<'a, 'b>,
+        test: Box<Expr>,
+        block: Block,
+        else_kind: Box<ElseKind>,
+        span: Span,
     },
     ElseIfLet {
-        pattern: Pattern<'a, 'b>,
-        expr: Box<Expr<'a, 'b>>,
-        block: Block<'a, 'b>,
-        else_kind: Box<ElseKind<'a, 'b>>,
-        span: Span<'a, 'b>,
+        pattern: Pattern,
+        expr: Box<Expr>,
+        block: Block,
+        else_kind: Box<ElseKind>,
+        span: Span,
     },
     Nothing {
-        span: Span<'a, 'b>,
+        span: Span,
     },
 }
 
-impl<'a, 'b> ElseKind<'a, 'b> {
-    pub fn span(&self) -> Span<'a, 'b> {
+impl ElseKind {
+    pub fn span(&self) -> Span {
         match self {
             ElseKind::Else { span, .. }
             | ElseKind::ElseIf { span, .. }
@@ -737,20 +727,13 @@ impl<'a, 'b> ElseKind<'a, 'b> {
 }
 
 #[derive(Debug)]
-pub enum ExprField<'a, 'b> {
-    Name {
-        name: Name<'a, 'b>,
-        span: Span<'a, 'b>,
-    },
-    Expr {
-        name: Name<'a, 'b>,
-        expr: Expr<'a, 'b>,
-        span: Span<'a, 'b>,
-    },
+pub enum ExprField {
+    Name { name: Name, span: Span },
+    Expr { name: Name, expr: Expr, span: Span },
 }
 
-impl<'a, 'b> ExprField<'a, 'b> {
-    pub fn span(&self) -> Span<'a, 'b> {
+impl ExprField {
+    pub fn span(&self) -> Span {
         match self {
             ExprField::Name { span, .. } | ExprField::Expr { span, .. } => *span,
         }
@@ -758,37 +741,37 @@ impl<'a, 'b> ExprField<'a, 'b> {
 }
 
 #[derive(Debug)]
-pub enum Pattern<'a, 'b> {
+pub enum Pattern {
     Wild {
-        span: Span<'a, 'b>,
+        span: Span,
     },
     Path {
-        path: Path<'a, 'b>,
-        span: Span<'a, 'b>,
+        path: Path,
+        span: Span,
     },
     Struct {
-        path: Path<'a, 'b>,
-        fields: Vec<FieldPattern<'a, 'b>>,
-        dots: Option<Span<'a, 'b>>,
-        span: Span<'a, 'b>,
+        path: Path,
+        fields: Vec<FieldPattern>,
+        dots: Option<Span>,
+        span: Span,
     },
     Enum {
-        path: Path<'a, 'b>,
-        tuple: Vec<Pattern<'a, 'b>>,
-        span: Span<'a, 'b>,
+        path: Path,
+        tuple: Vec<Pattern>,
+        span: Span,
     },
     Tuple {
-        tuple: Vec<Pattern<'a, 'b>>,
-        span: Span<'a, 'b>,
+        tuple: Vec<Pattern>,
+        span: Span,
     },
     Array {
-        array: Vec<Pattern<'a, 'b>>,
-        span: Span<'a, 'b>,
+        array: Vec<Pattern>,
+        span: Span,
     },
 }
 
-impl<'a, 'b> Pattern<'a, 'b> {
-    pub fn span(&self) -> Span<'a, 'b> {
+impl Pattern {
+    pub fn span(&self) -> Span {
         match self {
             Pattern::Wild { span, .. }
             | Pattern::Path { span, .. }
@@ -798,19 +781,32 @@ impl<'a, 'b> Pattern<'a, 'b> {
             | Pattern::Array { span, .. } => *span,
         }
     }
+
+    pub fn into_name(self) -> Result<Name, Span> {
+        let span = self.span();
+        if let Pattern::Path { mut path, .. } = self {
+            if path.path.len() == 1 {
+                Ok(path.path.pop().unwrap())
+            } else {
+                Err(span)
+            }
+        } else {
+            Err(span)
+        }
+    }
 }
 
 #[derive(Debug)]
-pub struct FieldPattern<'a, 'b> {
-    pub name: Name<'a, 'b>,
-    pub pattern: Option<Pattern<'a, 'b>>,
-    pub span: Span<'a, 'b>,
+pub struct FieldPattern {
+    pub name: Name,
+    pub pattern: Option<Pattern>,
+    pub span: Span,
 }
 
 #[derive(Debug)]
-pub struct ImplFn<'a, 'b> {
+pub struct ImplFn {
     pub is_pub: bool,
-    pub signature: Signature<'a, 'b>,
-    pub block: Block<'a, 'b>,
-    pub span: Span<'a, 'b>,
+    pub signature: Signature,
+    pub block: Block,
+    pub span: Span,
 }

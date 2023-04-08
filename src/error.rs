@@ -1,25 +1,27 @@
 use std::io::{self, Write};
 
+use crate::io::FileMap;
 use crate::span::Span;
 use crate::{color, reset};
 
 #[derive(Debug)]
-pub enum Error<'a, 'b> {
-    Lex(String, Span<'a, 'b>, Vec<Note<'a, 'b>>),
-    Parse(String, Span<'a, 'b>, Vec<Note<'a, 'b>>),
+pub enum Error {
+    Lex(String, Span, Vec<Note>),
+    Parse(String, Span, Vec<Note>),
+    Io(String, Option<Span>, Vec<Note>),
 }
 
-impl Error<'_, '_> {
-    pub fn print(&self) {
-        self.write(&mut io::stdout(), true).unwrap();
+impl Error {
+    pub fn print(&self, map: &FileMap) {
+        self.write(&mut io::stdout(), true, map).unwrap();
     }
 
-    pub fn println(&self) {
-        self.print();
+    pub fn println(&self, map: &FileMap) {
+        self.print(map);
         println!();
     }
 
-    pub fn write<W: Write>(&self, out: &mut W, color: bool) -> io::Result<()> {
+    pub fn write<W: Write>(&self, out: &mut W, color: bool, map: &FileMap) -> io::Result<()> {
         match self {
             Error::Lex(msg, span, notes) => {
                 writeln!(
@@ -30,11 +32,11 @@ impl Error<'_, '_> {
                     msg
                 )?;
 
-                span.write(out, color)?;
+                span.write(out, color, map)?;
 
                 for note in notes {
                     writeln!(out)?;
-                    note.write(out, color)?;
+                    note.write(out, color, map)?;
                 }
                 Ok(())
             }
@@ -47,11 +49,31 @@ impl Error<'_, '_> {
                     msg
                 )?;
 
-                span.write(out, color)?;
+                span.write(out, color, map)?;
 
                 for note in notes {
                     writeln!(out)?;
-                    note.write(out, color)?;
+                    note.write(out, color, map)?;
+                }
+                Ok(())
+            }
+            Error::Io(msg, span, notes) => {
+                write!(
+                    out,
+                    "{}io error:{} {}",
+                    color!(Red, color),
+                    reset!(color),
+                    msg
+                )?;
+
+                if let Some(span) = span {
+                    writeln!(out)?;
+                    span.write(out, color, map)?;
+                }
+
+                for note in notes {
+                    writeln!(out)?;
+                    note.write(out, color, map)?;
                 }
                 Ok(())
             }
@@ -60,17 +82,17 @@ impl Error<'_, '_> {
 }
 
 #[derive(Debug)]
-pub struct Note<'a, 'b> {
+pub struct Note {
     msg: String,
-    span: Option<Span<'a, 'b>>,
+    span: Option<Span>,
 }
 
-impl<'a, 'b> Note<'a, 'b> {
-    pub fn new(msg: String, span: Option<Span<'a, 'b>>) -> Self {
+impl Note {
+    pub fn new(msg: String, span: Option<Span>) -> Self {
         Note { msg, span }
     }
 
-    fn write<W: Write>(&self, out: &mut W, color: bool) -> io::Result<()> {
+    fn write<W: Write>(&self, out: &mut W, color: bool, map: &FileMap) -> io::Result<()> {
         write!(
             out,
             "{}note:{} {}",
@@ -81,7 +103,7 @@ impl<'a, 'b> Note<'a, 'b> {
 
         if let Some(span) = self.span {
             writeln!(out)?;
-            span.write(out, color)?;
+            span.write(out, color, map)?;
         }
         Ok(())
     }
