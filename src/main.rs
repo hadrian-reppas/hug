@@ -2,6 +2,7 @@ mod ast;
 mod error;
 mod io;
 mod lex;
+mod modules;
 mod parse;
 mod span;
 
@@ -33,19 +34,14 @@ fn compile(map: &mut io::FileMap) -> Result<(), error::Error> {
         ));
     };
 
-    let main_unit = get_unit(main_path, map)?;
+    let mut prefix = main_path.clone();
+    prefix.pop();
+    let main_name = main_path.file_name().unwrap().to_str().unwrap().to_string();
+    let main_unit = map.get_unit(main_path)?;
 
-    for item in main_unit {
-        println!("{:#?}", item);
-        item.span().println(map);
-    }
+    let tree = modules::collect(main_unit, main_name, prefix, map)?;
+
+    println!("{tree:#?}");
 
     todo!()
-}
-
-fn get_unit(path: PathBuf, map: &mut io::FileMap) -> Result<Vec<ast::Item>, error::Error> {
-    let id = map.load(path)?;
-    let code = map.get_code(id);
-    let unit = parse::parse(code, id)?;
-    Ok(unit)
 }

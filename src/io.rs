@@ -1,7 +1,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::ast::Item;
 use crate::error::Error;
+use crate::parse;
 use crate::span::Span;
 
 pub struct FileMap(Vec<FileInfo>);
@@ -30,6 +32,16 @@ impl FileMap {
     pub fn text_at(&self, span: Span) -> &str {
         let code = self.get_code(span.location.file_id);
         &code[span.start..span.end]
+    }
+
+    pub fn get_unit(&mut self, path: PathBuf) -> Result<Vec<Item>, Error> {
+        let id = self.load(path)?;
+        let code = self.get_code(id);
+        parse::parse(code, id)
+    }
+
+    pub fn contains(&self, path: &Path) -> bool {
+        self.0.iter().any(|info| info.path == path)
     }
 }
 
