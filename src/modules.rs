@@ -18,9 +18,18 @@ pub enum FileTree {
     },
 }
 
-pub fn collect(items: Vec<Item>, name: String, prefix: PathBuf, map: &mut FileMap) -> Result<Vec<FileTree>, Error> {
+pub fn collect(
+    items: Vec<Item>,
+    name: String,
+    prefix: PathBuf,
+    map: &mut FileMap,
+) -> Result<Vec<FileTree>, Error> {
     let mut tree = make_file_tree(&items, prefix, map)?;
-    tree.push(FileTree::File { name, items, is_main: true });
+    tree.push(FileTree::File {
+        name,
+        items,
+        is_main: true,
+    });
     Ok(tree)
 }
 
@@ -57,7 +66,6 @@ fn make_file_tree(
             } else if map.contains(&file) || map.contains(&mod_file) {
                 continue;
             }
-
 
             if file.is_file() {
                 tree.push(FileTree::File {

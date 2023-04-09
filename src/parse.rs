@@ -103,7 +103,7 @@ impl<'a> Parser<'a> {
             Struct => self.struct_def(pub_span),
             Enum => self.enum_def(pub_span),
             Impl => self.impl_block(pub_span),
-            Trait => self.trait_def(pub_span),
+            Trait | Unique => self.trait_def(pub_span),
             Type => self.type_alias(pub_span),
             Const => self.const_def(pub_span),
             Static => self.static_decl(pub_span),
@@ -547,7 +547,17 @@ impl<'a> Parser<'a> {
     }
 
     fn trait_def(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
-        let (first_span, is_pub) = self.handle_pub(pub_span, Trait)?;
+        let ((first_span, is_pub), is_unique) = if self.peek(Unique)? {
+            let unique_span = self.expect(Unique)?.span;
+            self.expect(Trait)?;
+            if let Some(span) = pub_span {
+                ((span, true), true)
+            } else {
+                ((unique_span, false), true)
+            }
+        } else {
+            (self.handle_pub(pub_span, Trait)?, false)
+        };
 
         let name = self.name()?;
         let generic_params = if self.peek(Lt)? {
@@ -584,6 +594,7 @@ impl<'a> Parser<'a> {
         let span = first_span.to(last.span);
         Ok(Item::Trait {
             is_pub,
+            is_unique,
             name,
             generic_params,
             self_bounds,
@@ -2251,7 +2262,7 @@ impl Sequence for TokenKind {
             Dash, Plus, Star, Slash, Caret, Percent, Amp, Bar, And, As, Break, Const, Continue,
             Else, Enum, Extern, False, Fn, For, Goto, If, Impl, In, Let, Loop, Match, Mod, Mut,
             Not, Or, Pub, Return, SelfType, SelfValue, Static, Struct, Trait, Try, True, Type,
-            Use, Where, While, Eof,
+            Unique, Use, Where, While, Eof,
         }
     }
 }

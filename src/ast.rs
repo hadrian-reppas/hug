@@ -115,6 +115,7 @@ pub enum Item {
     },
     Trait {
         is_pub: bool,
+        is_unique: bool,
         name: Name,
         generic_params: Option<GenericParams>,
         self_bounds: Vec<TraitBound>,
