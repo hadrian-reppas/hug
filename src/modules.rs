@@ -62,11 +62,11 @@ fn make_file_tree(
             if file.is_file() {
                 tree.push(FileTree::File {
                     name: name.name.clone(),
-                    items: map.get_unit(file)?,
+                    items: map.parse(file)?,
                     is_main: false,
                 });
             } else {
-                let items = map.get_unit(mod_file)?;
+                let items = map.parse(mod_file)?;
                 file.set_extension("");
                 let files = make_file_tree(&items, file, map)?;
                 tree.push(FileTree::Dir {

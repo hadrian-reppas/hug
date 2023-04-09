@@ -34,7 +34,7 @@ impl FileMap {
         &code[span.start..span.end]
     }
 
-    pub fn get_unit(&mut self, path: PathBuf) -> Result<Vec<Item>, Error> {
+    pub fn parse(&mut self, path: PathBuf) -> Result<Vec<Item>, Error> {
         let id = self.load(path)?;
         let code = self.get_code(id);
         parse::parse(code, id)

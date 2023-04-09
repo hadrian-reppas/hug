@@ -8,7 +8,7 @@ use crate::span::Span;
 
 pub fn parse(code: &str, file_id: FileId) -> Result<Vec<Item>, Error> {
     let mut parser = Parser::new(code, file_id);
-    parser.unit()
+    parser.items()
 }
 
 struct Parser<'a> {
@@ -83,7 +83,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn unit(&mut self) -> Result<Vec<Item>, Error> {
+    fn items(&mut self) -> Result<Vec<Item>, Error> {
         let mut items = Vec::new();
         while !self.peek(Eof)? {
             items.push(self.item()?);
