@@ -78,7 +78,7 @@ pub struct GenericArgs {
 }
 
 #[derive(Debug)]
-pub enum Item {
+pub enum UnloadedItem {
     Use {
         tree: UseTree,
         span: Span,
@@ -153,6 +153,101 @@ pub enum Item {
     },
 }
 
+impl UnloadedItem {
+    pub fn span(&self) -> Span {
+        match self {
+            UnloadedItem::Use { span, .. }
+            | UnloadedItem::Struct { span, .. }
+            | UnloadedItem::Enum { span, .. }
+            | UnloadedItem::Type { span, .. }
+            | UnloadedItem::Mod { span, .. }
+            | UnloadedItem::Extern { span, .. }
+            | UnloadedItem::Trait { span, .. }
+            | UnloadedItem::Fn { span, .. }
+            | UnloadedItem::Impl { span, .. }
+            | UnloadedItem::Const { span, .. }
+            | UnloadedItem::Static { span, .. } => *span,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum Item {
+    Use {
+        tree: UseTree,
+        span: Span,
+    },
+    Struct {
+        is_pub: bool,
+        name: Name,
+        generic_params: Option<GenericParams>,
+        fields: Vec<StructField>,
+        span: Span,
+    },
+    Enum {
+        is_pub: bool,
+        name: Name,
+        generic_params: Option<GenericParams>,
+        items: Vec<EnumItem>,
+        span: Span,
+    },
+    Type {
+        is_pub: bool,
+        name: Name,
+        generic_params: Option<GenericParams>,
+        ty: Ty,
+        span: Span,
+    },
+    Mod {
+        is_pub: bool,
+        name: Name,
+        span: Span,
+        items: Vec<Item>,
+    },
+    Extern {
+        items: Vec<ExternItem>,
+        span: Span,
+    },
+    Trait {
+        is_pub: bool,
+        is_unique: bool,
+        name: Name,
+        generic_params: Option<GenericParams>,
+        self_bounds: Vec<TraitBound>,
+        where_clause: Option<WhereClause>,
+        items: Vec<TraitItem>,
+        span: Span,
+    },
+    Fn {
+        is_pub: bool,
+        signature: Signature,
+        block: Block,
+        span: Span,
+    },
+    Impl {
+        name: Name,
+        generic_params: Option<GenericParams>,
+        as_trait: Option<TraitBound>,
+        where_clause: Option<WhereClause>,
+        fns: Vec<ImplFn>,
+        span: Span,
+    },
+    Const {
+        is_pub: bool,
+        name: Name,
+        ty: Ty,
+        expr: Expr,
+        span: Span,
+    },
+    Static {
+        is_pub: bool,
+        name: Name,
+        ty: Ty,
+        expr: Option<Expr>,
+        span: Span,
+    },
+}
+
 impl Item {
     pub fn span(&self) -> Span {
         match self {
@@ -167,6 +262,127 @@ impl Item {
             | Item::Impl { span, .. }
             | Item::Const { span, .. }
             | Item::Static { span, .. } => *span,
+        }
+    }
+}
+
+impl TryFrom<UnloadedItem> for Item {
+    type Error = (bool, Name, Span);
+    fn try_from(item: UnloadedItem) -> Result<Item, (bool, Name, Span)> {
+        match item {
+            UnloadedItem::Use { tree, span } => Ok(Item::Use { tree, span }),
+            UnloadedItem::Struct {
+                is_pub,
+                name,
+                generic_params,
+                fields,
+                span,
+            } => Ok(Item::Struct {
+                is_pub,
+                name,
+                generic_params,
+                fields,
+                span,
+            }),
+            UnloadedItem::Enum {
+                is_pub,
+                name,
+                generic_params,
+                items,
+                span,
+            } => Ok(Item::Enum {
+                is_pub,
+                name,
+                generic_params,
+                items,
+                span,
+            }),
+            UnloadedItem::Type {
+                is_pub,
+                name,
+                generic_params,
+                ty,
+                span,
+            } => Ok(Item::Type {
+                is_pub,
+                name,
+                generic_params,
+                ty,
+                span,
+            }),
+            UnloadedItem::Mod { is_pub, name, span } => Err((is_pub, name, span)),
+            UnloadedItem::Extern { items, span } => Ok(Item::Extern { items, span }),
+            UnloadedItem::Trait {
+                is_pub,
+                is_unique,
+                name,
+                generic_params,
+                self_bounds,
+                where_clause,
+                items,
+                span,
+            } => Ok(Item::Trait {
+                is_pub,
+                is_unique,
+                name,
+                generic_params,
+                self_bounds,
+                where_clause,
+                items,
+                span,
+            }),
+            UnloadedItem::Fn {
+                is_pub,
+                signature,
+                block,
+                span,
+            } => Ok(Item::Fn {
+                is_pub,
+                signature,
+                block,
+                span,
+            }),
+            UnloadedItem::Impl {
+                name,
+                generic_params,
+                as_trait,
+                where_clause,
+                fns,
+                span,
+            } => Ok(Item::Impl {
+                name,
+                generic_params,
+                as_trait,
+                where_clause,
+                fns,
+                span,
+            }),
+            UnloadedItem::Const {
+                is_pub,
+                name,
+                ty,
+                expr,
+                span,
+            } => Ok(Item::Const {
+                is_pub,
+                name,
+                ty,
+                expr,
+                span,
+            }),
+            UnloadedItem::Static {
+                is_pub,
+                name,
+                ty,
+                expr,
+                span,
+            } => Ok(Item::Static {
+                is_pub,
+                name,
+                ty,
+                expr,
+                span,
+            }),
         }
     }
 }
@@ -345,16 +561,13 @@ pub struct Block {
     pub span: Span,
 }
 
+// TODO: this should include Use, Type, Extern, Fn, Const and Static variants
 #[derive(Debug)]
 pub enum Stmt {
     Local {
         pattern: Pattern,
         ty: Option<Ty>,
         expr: Option<Expr>,
-        span: Span,
-    },
-    Item {
-        item: Item,
         span: Span,
     },
     Expr {
@@ -366,7 +579,7 @@ pub enum Stmt {
 impl Stmt {
     pub fn span(&self) -> Span {
         match self {
-            Stmt::Local { span, .. } | Stmt::Item { span, .. } | Stmt::Expr { span, .. } => *span,
+            Stmt::Local { span, .. } | Stmt::Expr { span, .. } => *span,
         }
     }
 }

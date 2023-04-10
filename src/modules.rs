@@ -1,89 +1,90 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use crate::ast::Item;
-use crate::error::Error;
+use crate::ast::{Item, Name, UnloadedItem};
+use crate::error::{Error, Note};
 use crate::io::FileMap;
-
-#[derive(Debug)]
-pub enum FileTree {
-    File {
-        name: String,
-        items: Vec<Item>,
-        is_main: bool,
-    },
-    Dir {
-        name: String,
-        items: Vec<Item>,
-        files: Vec<FileTree>,
-    },
-}
+use crate::span::Span;
 
 pub fn collect(
-    items: Vec<Item>,
-    name: String,
+    unloaded_items: Vec<UnloadedItem>,
     prefix: PathBuf,
     map: &mut FileMap,
-) -> Result<Vec<FileTree>, Error> {
-    let mut tree = make_file_tree(&items, prefix, map)?;
-    tree.push(FileTree::File {
-        name,
-        items,
-        is_main: true,
-    });
-    Ok(tree)
-}
-
-fn make_file_tree(
-    items: &[Item],
-    prefix: PathBuf,
-    map: &mut FileMap,
-) -> Result<Vec<FileTree>, Error> {
-    let mut tree = Vec::new();
-    for item in items {
-        if let Item::Mod { name, .. } = item {
-            let mut file = prefix.clone();
-            file.push(&name.name);
-            file.set_extension("hug");
-            let mut mod_file = prefix.clone();
-            mod_file.push(&name.name);
-            mod_file.push("mod.hug");
-
-            if file.is_file() && mod_file.is_file() {
-                return Err(Error::Io(
-                    format!(
-                        "file for module `{}` found at both {:?} and {:?}",
-                        name.name, file, mod_file
-                    ),
-                    Some(name.span),
-                    vec![],
-                ));
-            } else if !file.is_file() && !mod_file.is_file() {
-                return Err(Error::Io(
-                    format!("file not found for module `{}`", name.name),
-                    Some(name.span),
-                    vec![],
-                ));
-            } else if map.contains(&file) || map.contains(&mod_file) {
-                continue;
-            }
-
-            if file.is_file() {
-                tree.push(FileTree::File {
-                    name: name.name.clone(),
-                    items: map.parse(file)?,
-                    is_main: false,
-                });
-            } else {
-                let items = map.parse(mod_file)?;
-                file.set_extension("");
-                let files = make_file_tree(&items, file, map)?;
-                tree.push(FileTree::Dir {
-                    name: name.name.clone(),
-                    items,
-                    files,
-                });
-            }
+) -> Result<Vec<Item>, Error> {
+    let mut items = Vec::new();
+    for item in unloaded_items {
+        match Item::try_from(item) {
+            Ok(item) => items.push(item),
+            Err((is_pub, name, span)) => items.push(handle_mod(is_pub, name, span, &prefix, map)?),
         }
     }
-    Ok(tree)
+    Ok(items)
+}
+
+fn handle_mod(
+    is_pub: bool,
+    name: Name,
+    span: Span,
+    prefix: &Path,
+    map: &mut FileMap,
+) -> Result<Item, Error> {
+    let mut file_path = prefix.to_path_buf();
+    file_path.push(&name.name);
+    file_path.set_extension("hug");
+    let mut mod_path = prefix.to_path_buf();
+    mod_path.push(&name.name);
+    mod_path.push("mod.hug");
+
+    if file_path.is_file() && mod_path.is_file() {
+        Err(Error::Io(
+            format!(
+                "file for module `{}` found at both {:?} and {:?}",
+                name.name, file_path, mod_path
+            ),
+            Some(name.span),
+            vec![],
+        ))
+    } else if file_path.is_file() {
+        let mut file_items = Vec::new();
+        for item in map.parse(file_path)? {
+            match Item::try_from(item) {
+                Ok(item) => file_items.push(item),
+                Err((_, _, span)) => {
+                    return Err(Error::Io(
+                        "mod items are only allowed in the main file and \"mod.hug\" files"
+                            .to_string(),
+                        Some(span),
+                        vec![],
+                    ))
+                }
+            }
+        }
+        Ok(Item::Mod {
+            is_pub,
+            name,
+            items: file_items,
+            span,
+        })
+    } else if mod_path.is_file() {
+        let unloaded_items = map.parse(mod_path.clone())?;
+        mod_path.pop();
+        let mod_items = collect(unloaded_items, mod_path, map)?;
+        Ok(Item::Mod {
+            is_pub,
+            name,
+            items: mod_items,
+            span,
+        })
+    } else {
+        Err(Error::Io(
+            format!("file not found for module `{}`", name.name),
+            Some(name.span),
+            vec![Note::new(
+                format!(
+                    "to create the module `{}`, create file {file_path:?} or {mod_path:?}",
+                    name.name
+                ),
+                None,
+            )],
+        ))
+    }
 }

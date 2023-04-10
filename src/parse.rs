@@ -6,7 +6,7 @@ use crate::io::FileId;
 use crate::lex::{Token, TokenKind, TokenKind::*, Tokens};
 use crate::span::Span;
 
-pub fn parse(code: &str, file_id: FileId) -> Result<Vec<Item>, Error> {
+pub fn parse(code: &str, file_id: FileId) -> Result<Vec<UnloadedItem>, Error> {
     let mut parser = Parser::new(code, file_id);
     parser.items()
 }
@@ -83,7 +83,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn items(&mut self) -> Result<Vec<Item>, Error> {
+    fn items(&mut self) -> Result<Vec<UnloadedItem>, Error> {
         let mut items = Vec::new();
         while !self.peek(Eof)? {
             items.push(self.item()?);
@@ -91,7 +91,7 @@ impl<'a> Parser<'a> {
         Ok(items)
     }
 
-    fn item(&mut self) -> Result<Item, Error> {
+    fn item(&mut self) -> Result<UnloadedItem, Error> {
         let pub_span = if self.peek(Pub)? {
             Some(self.next()?.span)
         } else {
@@ -282,13 +282,13 @@ impl<'a> Parser<'a> {
         Ok(GenericArgs { args, span })
     }
 
-    fn use_decl(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
+    fn use_decl(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
         self.disallow_pub(pub_span, Use)?;
 
         let first = self.expect(Use)?;
         let tree = self.use_tree()?;
         let last = self.expect(Semi)?;
-        Ok(Item::Use {
+        Ok(UnloadedItem::Use {
             tree,
             span: first.span.to(last.span),
         })
@@ -338,7 +338,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn struct_def(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
+    fn struct_def(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Struct)?;
 
         let name = self.name()?;
@@ -353,7 +353,7 @@ impl<'a> Parser<'a> {
         if self.peek(RBrace)? {
             let last = self.expect(RBrace)?;
             let span = first_span.to(last.span);
-            return Ok(Item::Struct {
+            return Ok(UnloadedItem::Struct {
                 is_pub,
                 name,
                 generic_params,
@@ -371,7 +371,7 @@ impl<'a> Parser<'a> {
         let last = self.expect(RBrace)?;
 
         let span = first_span.to(last.span);
-        Ok(Item::Struct {
+        Ok(UnloadedItem::Struct {
             is_pub,
             name,
             generic_params,
@@ -433,7 +433,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn enum_def(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
+    fn enum_def(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Enum)?;
 
         let name = self.name()?;
@@ -448,7 +448,7 @@ impl<'a> Parser<'a> {
         if self.peek(RBrace)? {
             let last = self.expect(RBrace)?;
             let span = first_span.to(last.span);
-            return Ok(Item::Enum {
+            return Ok(UnloadedItem::Enum {
                 is_pub,
                 name,
                 generic_params,
@@ -466,7 +466,7 @@ impl<'a> Parser<'a> {
         let last = self.expect(RBrace)?;
 
         let span = first_span.to(last.span);
-        Ok(Item::Enum {
+        Ok(UnloadedItem::Enum {
             is_pub,
             name,
             generic_params,
@@ -513,7 +513,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn type_alias(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
+    fn type_alias(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Type)?;
 
         let name = self.name()?;
@@ -528,7 +528,7 @@ impl<'a> Parser<'a> {
         let last = self.expect(Semi)?;
 
         let span = first_span.to(last.span);
-        Ok(Item::Type {
+        Ok(UnloadedItem::Type {
             is_pub,
             name,
             generic_params,
@@ -537,16 +537,16 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn module(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
+    fn module(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Mod)?;
         let name = self.name()?;
         let last = self.expect(Semi)?;
 
         let span = first_span.to(last.span);
-        Ok(Item::Mod { is_pub, name, span })
+        Ok(UnloadedItem::Mod { is_pub, name, span })
     }
 
-    fn trait_def(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
+    fn trait_def(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
         let ((first_span, is_pub), is_unique) = if self.peek(Unique)? {
             let unique_span = self.expect(Unique)?.span;
             self.expect(Trait)?;
@@ -592,7 +592,7 @@ impl<'a> Parser<'a> {
         let last = self.expect(RBrace)?;
 
         let span = first_span.to(last.span);
-        Ok(Item::Trait {
+        Ok(UnloadedItem::Trait {
             is_pub,
             is_unique,
             name,
@@ -648,12 +648,7 @@ impl<'a> Parser<'a> {
         while !self.peek(RBrace)? {
             match self.peek_kind()? {
                 Let => stmts.push(self.local()?),
-                Pub | Fn | Struct | Enum | Type | Use | Trait | Impl | Const | Static | Extern
-                | Mod => {
-                    let item = self.item()?;
-                    let span = item.span();
-                    stmts.push(Stmt::Item { item, span });
-                }
+                Use | Type | Extern | Fn | Const | Static => todo!(),
                 Semi => {
                     self.expect(Semi)?;
                 }
@@ -1608,7 +1603,7 @@ impl<'a> Parser<'a> {
         Ok(Label { name, span })
     }
 
-    fn extern_block(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
+    fn extern_block(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
         self.disallow_pub(pub_span, Extern)?;
 
         let first = self.expect(Extern)?;
@@ -1620,7 +1615,7 @@ impl<'a> Parser<'a> {
         let last = self.expect(RBrace)?;
 
         let span = first.span.to(last.span);
-        Ok(Item::Extern { items, span })
+        Ok(UnloadedItem::Extern { items, span })
     }
 
     fn extern_item(&mut self) -> Result<ExternItem, Error> {
@@ -2074,7 +2069,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn fn_def(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
+    fn fn_def(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
         let signature = self.signature()?;
         let block = self.block()?;
 
@@ -2083,7 +2078,7 @@ impl<'a> Parser<'a> {
         } else {
             (signature.span.to(block.span), false)
         };
-        Ok(Item::Fn {
+        Ok(UnloadedItem::Fn {
             is_pub,
             signature,
             block,
@@ -2091,7 +2086,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn impl_block(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
+    fn impl_block(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
         self.disallow_pub(pub_span, Impl)?;
 
         let first = self.expect(Impl)?;
@@ -2120,7 +2115,7 @@ impl<'a> Parser<'a> {
         let last = self.expect(RBrace)?;
 
         let span = first.span.to(last.span);
-        Ok(Item::Impl {
+        Ok(UnloadedItem::Impl {
             name,
             generic_params,
             as_trait,
@@ -2154,7 +2149,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn const_def(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
+    fn const_def(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Const)?;
         let name = self.name()?;
         self.expect(Colon)?;
@@ -2164,7 +2159,7 @@ impl<'a> Parser<'a> {
         let last = self.expect(Semi)?;
 
         let span = first_span.to(last.span);
-        Ok(Item::Const {
+        Ok(UnloadedItem::Const {
             is_pub,
             name,
             ty,
@@ -2173,7 +2168,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn static_decl(&mut self, pub_span: Option<Span>) -> Result<Item, Error> {
+    fn static_decl(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Static)?;
         let name = self.name()?;
         self.expect(Colon)?;
@@ -2186,7 +2181,7 @@ impl<'a> Parser<'a> {
         let last = self.expect(Semi)?;
 
         let span = first_span.to(last.span);
-        Ok(Item::Static {
+        Ok(UnloadedItem::Static {
             is_pub,
             name,
             ty,

@@ -36,10 +36,9 @@ fn compile(map: &mut io::FileMap) -> Result<(), error::Error> {
 
     let mut prefix = main_path.clone();
     prefix.pop();
-    let main_name = main_path.file_name().unwrap().to_str().unwrap().to_string();
     let main_items = map.parse(main_path)?;
 
-    let tree = modules::collect(main_items, main_name, prefix, map)?;
+    let tree = modules::collect(main_items, prefix, map)?;
 
     println!("{tree:#?}");
 
