@@ -286,9 +286,18 @@ impl<'a> Parser<'a> {
         self.disallow_pub(pub_span, Use)?;
 
         let first = self.expect(Use)?;
+        let self_span = if self.peek(SelfValue)? {
+            let self_span = self.expect(SelfValue)?.span;
+            self.expect(Colon)?;
+            self.expect(Colon)?;
+            Some(self_span)
+        } else {
+            None
+        };
         let tree = self.use_tree()?;
         let last = self.expect(Semi)?;
         Ok(UnloadedItem::Use {
+            self_span,
             tree,
             span: first.span.to(last.span),
         })

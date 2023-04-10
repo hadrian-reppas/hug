@@ -80,6 +80,7 @@ pub struct GenericArgs {
 #[derive(Debug)]
 pub enum UnloadedItem {
     Use {
+        self_span: Option<Span>,
         tree: UseTree,
         span: Span,
     },
@@ -174,6 +175,7 @@ impl UnloadedItem {
 #[derive(Debug)]
 pub enum Item {
     Use {
+        self_span: Option<Span>,
         tree: UseTree,
         span: Span,
     },
@@ -270,7 +272,15 @@ impl TryFrom<UnloadedItem> for Item {
     type Error = (bool, Name, Span);
     fn try_from(item: UnloadedItem) -> Result<Item, (bool, Name, Span)> {
         match item {
-            UnloadedItem::Use { tree, span } => Ok(Item::Use { tree, span }),
+            UnloadedItem::Use {
+                self_span,
+                tree,
+                span,
+            } => Ok(Item::Use {
+                self_span,
+                tree,
+                span,
+            }),
             UnloadedItem::Struct {
                 is_pub,
                 name,
