@@ -436,6 +436,7 @@ pub enum ExternItem {
     Type {
         is_pub: bool,
         name: Name,
+        info: Option<ExternTypeInfo>,
         span: Span,
     },
     Static {
@@ -454,6 +455,14 @@ impl ExternItem {
             | ExternItem::Static { span, .. } => *span,
         }
     }
+}
+
+#[derive(Debug)]
+pub struct ExternTypeInfo {
+    pub name: Name,
+    pub size: Span,
+    pub align: Span,
+    pub span: Span,
 }
 
 #[derive(Debug)]

@@ -1707,10 +1707,32 @@ impl<'a> Parser<'a> {
                 };
 
                 let name = self.name()?;
+                let info = if self.consume(Eq)? {
+                    let name = self.name()?;
+                    self.expect(LParen)?;
+                    let size = self.expect(Int)?.span;
+                    self.expect(Comma)?;
+                    let align = self.expect(Int)?.span;
+                    let last = self.expect(RParen)?;
+                    let span = name.span.to(last.span);
+                    Some(ExternTypeInfo {
+                        name,
+                        size,
+                        align,
+                        span,
+                    })
+                } else {
+                    None
+                };
                 let last = self.expect(Semi)?;
 
                 let span = first_span.to(last.span);
-                Ok(ExternItem::Type { is_pub, name, span })
+                Ok(ExternItem::Type {
+                    is_pub,
+                    name,
+                    info,
+                    span,
+                })
             }
             Static => {
                 let (first_span, is_pub) = if let Some(span) = pub_span {
@@ -1735,7 +1757,8 @@ impl<'a> Parser<'a> {
             }
             kind => Err(Error::Parse(
                 format!(
-                    "expected {}, {} or {}, found {}",
+                    "expected {}, {}, {} or {}, found {}",
+                    Pub.desc(),
                     Fn.desc(),
                     Type.desc(),
                     Static.desc(),
