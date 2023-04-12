@@ -1382,6 +1382,10 @@ impl<'a> Parser<'a> {
     }
 
     fn ident_expr(&mut self, allow_struct: bool) -> Result<Expr, Error> {
+        if self.peek([Ident, Bang])? {
+            return self.macro_expr();
+        }
+
         let path = self.generic_path()?;
         if allow_struct && self.consume(LBrace)? {
             if self.peek(RBrace)? {
@@ -1408,6 +1412,49 @@ impl<'a> Parser<'a> {
             let span = path.span;
             Ok(Expr::Path { path, span })
         }
+    }
+
+    fn macro_expr(&mut self) -> Result<Expr, Error> {
+        let name = self.name()?;
+        self.expect(Bang)?;
+        let close = if self.peek(LParen)? {
+            self.expect(LParen)?;
+            RParen
+        } else if self.peek(LBrack)? {
+            self.expect(LBrack)?;
+            RBrack
+        } else {
+            return Err(Error::Parse(
+                format!(
+                    "expected {} or {} after macro name",
+                    LParen.desc(),
+                    LBrack.desc()
+                ),
+                self.peek_span()?,
+                vec![],
+            ));
+        };
+
+        if self.peek(close)? {
+            let last = self.expect(close)?.span;
+            let span = name.span.to(last);
+            return Ok(Expr::Macro {
+                name,
+                args: Vec::new(),
+                span,
+            });
+        }
+
+        let mut args = vec![self.expr(BindingPower::Start, true)?];
+        while !self.peek(close)? && !self.peek([Comma, close])? {
+            self.expect(Comma)?;
+            args.push(self.expr(BindingPower::Start, true)?);
+        }
+        self.consume(Comma)?;
+        let last = self.expect(close)?.span;
+
+        let span = name.span.to(last);
+        Ok(Expr::Macro { name, args, span })
     }
 
     fn generic_path(&mut self) -> Result<GenericPath, Error> {

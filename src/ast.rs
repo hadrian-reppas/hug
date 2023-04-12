@@ -766,6 +766,11 @@ pub enum Expr {
         args: Vec<Expr>,
         span: Span,
     },
+    Macro {
+        name: Name,
+        args: Vec<Expr>,
+        span: Span,
+    },
     Tuple {
         exprs: Vec<Expr>,
         span: Span,
@@ -926,6 +931,7 @@ impl Expr {
             Expr::Array { span, .. }
             | Expr::Call { span, .. }
             | Expr::MethodCall { span, .. }
+            | Expr::Macro { span, .. }
             | Expr::Tuple { span, .. }
             | Expr::Binary { span, .. }
             | Expr::Unary { span, .. }
