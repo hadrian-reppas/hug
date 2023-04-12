@@ -571,7 +571,6 @@ pub struct Block {
     pub span: Span,
 }
 
-// TODO: this should include Use, Type, Extern, Fn, Const and Static variants
 #[derive(Debug)]
 pub enum Stmt {
     Local {
@@ -584,12 +583,168 @@ pub enum Stmt {
         expr: Expr,
         span: Span,
     },
+    Use {
+        self_span: Option<Span>,
+        tree: UseTree,
+        span: Span,
+    },
+    Struct {
+        is_pub: bool,
+        name: Name,
+        generic_params: Option<GenericParams>,
+        fields: Vec<StructField>,
+        span: Span,
+    },
+    Enum {
+        is_pub: bool,
+        name: Name,
+        generic_params: Option<GenericParams>,
+        items: Vec<EnumItem>,
+        span: Span,
+    },
+    Type {
+        is_pub: bool,
+        name: Name,
+        generic_params: Option<GenericParams>,
+        ty: Ty,
+        span: Span,
+    },
+    Extern {
+        items: Vec<ExternItem>,
+        span: Span,
+    },
+    Fn {
+        is_pub: bool,
+        signature: Signature,
+        block: Block,
+        span: Span,
+    },
+    Const {
+        is_pub: bool,
+        name: Name,
+        ty: Ty,
+        expr: Expr,
+        span: Span,
+    },
+    Static {
+        is_pub: bool,
+        name: Name,
+        ty: Ty,
+        expr: Option<Expr>,
+        span: Span,
+    },
 }
 
 impl Stmt {
     pub fn span(&self) -> Span {
         match self {
-            Stmt::Local { span, .. } | Stmt::Expr { span, .. } => *span,
+            Stmt::Local { span, .. }
+            | Stmt::Expr { span, .. }
+            | Stmt::Use { span, .. }
+            | Stmt::Struct { span, .. }
+            | Stmt::Enum { span, .. }
+            | Stmt::Type { span, .. }
+            | Stmt::Extern { span, .. }
+            | Stmt::Fn { span, .. }
+            | Stmt::Const { span, .. }
+            | Stmt::Static { span, .. } => *span,
+        }
+    }
+}
+
+impl TryFrom<UnloadedItem> for Stmt {
+    type Error = ();
+    fn try_from(item: UnloadedItem) -> Result<Stmt, ()> {
+        match item {
+            UnloadedItem::Use {
+                self_span,
+                tree,
+                span,
+            } => Ok(Stmt::Use {
+                self_span,
+                tree,
+                span,
+            }),
+            UnloadedItem::Struct {
+                is_pub,
+                name,
+                generic_params,
+                fields,
+                span,
+            } => Ok(Stmt::Struct {
+                is_pub,
+                name,
+                generic_params,
+                fields,
+                span,
+            }),
+            UnloadedItem::Enum {
+                is_pub,
+                name,
+                generic_params,
+                items,
+                span,
+            } => Ok(Stmt::Enum {
+                is_pub,
+                name,
+                generic_params,
+                items,
+                span,
+            }),
+            UnloadedItem::Type {
+                is_pub,
+                name,
+                generic_params,
+                ty,
+                span,
+            } => Ok(Stmt::Type {
+                is_pub,
+                name,
+                generic_params,
+                ty,
+                span,
+            }),
+            UnloadedItem::Extern { items, span } => Ok(Stmt::Extern { items, span }),
+            UnloadedItem::Fn {
+                is_pub,
+                signature,
+                block,
+                span,
+            } => Ok(Stmt::Fn {
+                is_pub,
+                signature,
+                block,
+                span,
+            }),
+            UnloadedItem::Const {
+                is_pub,
+                name,
+                ty,
+                expr,
+                span,
+            } => Ok(Stmt::Const {
+                is_pub,
+                name,
+                ty,
+                expr,
+                span,
+            }),
+            UnloadedItem::Static {
+                is_pub,
+                name,
+                ty,
+                expr,
+                span,
+            } => Ok(Stmt::Static {
+                is_pub,
+                name,
+                ty,
+                expr,
+                span,
+            }),
+            UnloadedItem::Trait { .. } | UnloadedItem::Mod { .. } | UnloadedItem::Impl { .. } => {
+                Err(())
+            }
         }
     }
 }

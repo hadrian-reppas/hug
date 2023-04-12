@@ -657,7 +657,9 @@ impl<'a> Parser<'a> {
         while !self.peek(RBrace)? {
             match self.peek_kind()? {
                 Let => stmts.push(self.local()?),
-                Use | Type | Extern | Fn | Const | Static => todo!(),
+                Use | Struct | Enum | Type | Extern | Fn | Const | Static => {
+                    stmts.push(self.item()?.try_into().unwrap())
+                }
                 Semi => {
                     self.expect(Semi)?;
                 }
