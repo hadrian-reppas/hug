@@ -39,8 +39,10 @@ fn compile(map: &mut io::FileMap) -> Result<(), error::Error> {
     let main_items = map.parse(main_path)?;
 
     let tree = modules::collect(main_items, prefix, map)?;
+    println!("self: {tree:#?}");
 
-    println!("{tree:#?}");
+    let std = modules::get_std(map)?;
+    println!("std: {std:#?}");
 
     todo!()
 }

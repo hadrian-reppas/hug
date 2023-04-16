@@ -27,6 +27,14 @@ fn handle_mod(
     prefix: &Path,
     map: &mut FileMap,
 ) -> Result<Item, Error> {
+    if name.name == "std" {
+        return Err(Error::Parse(
+            "module name `std` is reserved".to_string(),
+            name.span,
+            vec![],
+        ));
+    }
+
     let mut file_path = prefix.to_path_buf();
     file_path.push(&name.name);
     file_path.set_extension("hug");
@@ -87,4 +95,53 @@ fn handle_mod(
             )],
         ))
     }
+}
+
+pub fn get_std(map: &mut FileMap) -> Result<Vec<Item>, Error> {
+    let mut items = Vec::new();
+    for item in map.parse_std(&["lib"])?.0 {
+        match Item::try_from(item) {
+            Ok(item) => items.push(item),
+            Err((is_pub, name, span)) => items.push(handle_std_mod(is_pub, name, span, &[], map)?),
+        }
+    }
+    Ok(items)
+}
+
+fn handle_std_mod(
+    is_pub: bool,
+    name: Name,
+    span: Span,
+    prefix: &[&str],
+    map: &mut FileMap,
+) -> Result<Item, Error> {
+    let mut path = prefix.to_vec();
+    path.push(&name.name);
+    let (unloaded_items, is_mod) = map.parse_std(&path)?;
+
+    let mut items = Vec::new();
+    for unloaded_item in unloaded_items {
+        match Item::try_from(unloaded_item) {
+            Ok(item) => items.push(item),
+            Err((is_pub, name, span)) => {
+                if is_mod {
+                    items.push(handle_std_mod(is_pub, name, span, &path, map)?)
+                } else {
+                    return Err(Error::Io(
+                        "mod items are only allowed in the main file and \"mod.hug\" files"
+                            .to_string(),
+                        Some(span),
+                        vec![],
+                    ));
+                }
+            }
+        }
+    }
+
+    Ok(Item::Mod {
+        is_pub,
+        name,
+        items,
+        span,
+    })
 }

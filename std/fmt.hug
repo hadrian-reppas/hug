@@ -1,0 +1,9 @@
+pub type Result = std::result::Result<(), std::io::Error>;
+
+pub trait Debug {
+    fn debug(*self, f: *Formatter) -> Result;
+}
+
+pub struct Formatter {
+    
+}
