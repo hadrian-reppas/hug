@@ -2,7 +2,6 @@ mod ast;
 mod error;
 mod io;
 mod lex;
-mod modules;
 mod parse;
 mod span;
 
@@ -34,14 +33,10 @@ fn compile(map: &mut io::FileMap) -> Result<(), error::Error> {
         ));
     };
 
-    let mut prefix = main_path.clone();
-    prefix.pop();
-    let main_items = map.parse(main_path)?;
-
-    let tree = modules::collect(main_items, prefix, map)?;
+    let tree = map.parse_all(main_path)?;
     println!("self: {tree:#?}");
 
-    let std = modules::get_std(map)?;
+    let std = map.parse_std()?;
     println!("std: {std:#?}");
 
     todo!()
