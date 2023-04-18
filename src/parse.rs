@@ -104,7 +104,6 @@ impl<'a> Parser<'a> {
             Enum => self.enum_def(pub_span),
             Impl => self.impl_block(pub_span),
             Trait | Unique => self.trait_def(pub_span),
-            Type => self.type_alias(pub_span),
             Const => self.const_def(pub_span),
             Static => self.static_decl(pub_span),
             Use => self.use_decl(pub_span),
@@ -522,30 +521,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn type_alias(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
-        let (first_span, is_pub) = self.handle_pub(pub_span, Type)?;
-
-        let name = self.name()?;
-        let generic_params = if self.peek(Lt)? {
-            Some(self.generic_params()?)
-        } else {
-            None
-        };
-
-        self.expect(Eq)?;
-        let ty = self.ty()?;
-        let last = self.expect(Semi)?;
-
-        let span = first_span.to(last.span);
-        Ok(UnloadedItem::Type {
-            is_pub,
-            name,
-            generic_params,
-            ty,
-            span,
-        })
-    }
-
     fn module(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Mod)?;
         let name = self.name()?;
@@ -657,7 +632,7 @@ impl<'a> Parser<'a> {
         while !self.peek(RBrace)? {
             match self.peek_kind()? {
                 Let => stmts.push(self.local()?),
-                Use | Struct | Enum | Type | Extern | Fn | Const | Static => {
+                Use | Struct | Enum | Extern | Fn | Const | Static => {
                     stmts.push(self.item()?.try_into().unwrap())
                 }
                 Semi => {

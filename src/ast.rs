@@ -98,13 +98,6 @@ pub enum UnloadedItem {
         items: Vec<EnumItem>,
         span: Span,
     },
-    Type {
-        is_pub: bool,
-        name: Name,
-        generic_params: Option<GenericParams>,
-        ty: Ty,
-        span: Span,
-    },
     Mod {
         is_pub: bool,
         name: Name,
@@ -160,7 +153,6 @@ impl UnloadedItem {
             UnloadedItem::Use { span, .. }
             | UnloadedItem::Struct { span, .. }
             | UnloadedItem::Enum { span, .. }
-            | UnloadedItem::Type { span, .. }
             | UnloadedItem::Mod { span, .. }
             | UnloadedItem::Extern { span, .. }
             | UnloadedItem::Trait { span, .. }
@@ -191,13 +183,6 @@ pub enum Item {
         name: Name,
         generic_params: Option<GenericParams>,
         items: Vec<EnumItem>,
-        span: Span,
-    },
-    Type {
-        is_pub: bool,
-        name: Name,
-        generic_params: Option<GenericParams>,
-        ty: Ty,
         span: Span,
     },
     Mod {
@@ -256,7 +241,6 @@ impl Item {
             Item::Use { span, .. }
             | Item::Struct { span, .. }
             | Item::Enum { span, .. }
-            | Item::Type { span, .. }
             | Item::Mod { span, .. }
             | Item::Extern { span, .. }
             | Item::Trait { span, .. }
@@ -305,19 +289,6 @@ impl TryFrom<UnloadedItem> for Item {
                 name,
                 generic_params,
                 items,
-                span,
-            }),
-            UnloadedItem::Type {
-                is_pub,
-                name,
-                generic_params,
-                ty,
-                span,
-            } => Ok(Item::Type {
-                is_pub,
-                name,
-                generic_params,
-                ty,
                 span,
             }),
             UnloadedItem::Mod { is_pub, name, span } => Err((is_pub, name, span)),
@@ -698,19 +669,6 @@ impl TryFrom<UnloadedItem> for Stmt {
                 name,
                 generic_params,
                 items,
-                span,
-            }),
-            UnloadedItem::Type {
-                is_pub,
-                name,
-                generic_params,
-                ty,
-                span,
-            } => Ok(Stmt::Type {
-                is_pub,
-                name,
-                generic_params,
-                ty,
                 span,
             }),
             UnloadedItem::Extern { items, span } => Ok(Stmt::Extern { items, span }),
