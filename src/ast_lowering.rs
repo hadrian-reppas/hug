@@ -448,6 +448,33 @@ fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
     Ok(map)
 }
 
+struct Resolver<'a> {
+    global: NameTree,
+    stack: Vec<HashMap<&'a str, NameNode>>,
+}
+
+fn resolve(
+    items: Vec<ast::Item>,
+    resolver: &mut Resolver,
+    self_name: &str,
+) -> Result<Vec<hir::Item>, Error> {
+    let mut hir_items = Vec::new();
+
+    for item in &items {
+        match item {
+            _ => todo!(),
+        }
+    }
+
+    for item in items {
+        match item {
+            _ => todo!(),
+        }
+    }
+
+    Ok(hir_items)
+}
+
 #[derive(Debug)]
 pub struct Lowered {
     items: Vec<hir::Item>,
@@ -478,10 +505,17 @@ pub fn lower(
         );
     }
 
-    let tree = NameTree(map);
+    let mut resolver = Resolver {
+        global: NameTree(map),
+        stack: Vec::new(),
+    };
 
-    println!("items: {items:#?}");
-    println!("tree: {tree:#?}");
+    let mut lowered_items = resolve(items, &mut resolver, "self")?;
+    for (name, items) in other_items {
+        lowered_items.append(&mut resolve(items, &mut resolver, &name)?);
+    }
+
+    println!("lowered_items: {lowered_items:#?}");
 
     todo!()
 }
