@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 
 use crate::ast::*;
 use crate::error::{Error, Note};
+use crate::hir::HirId;
 use crate::io::FileId;
 use crate::lex::{Token, TokenKind, TokenKind::*, Tokens};
 use crate::span::Span;
@@ -492,6 +493,7 @@ impl<'a> Parser<'a> {
                 name,
                 tuple: None,
                 span,
+                id: HirId::new(),
             });
         }
 
@@ -502,6 +504,7 @@ impl<'a> Parser<'a> {
                 name,
                 tuple: Some(Vec::new()),
                 span,
+                id: HirId::new(),
             });
         }
 
@@ -518,6 +521,7 @@ impl<'a> Parser<'a> {
             name,
             tuple: Some(tuple),
             span,
+            id: HirId::new(),
         })
     }
 
@@ -604,7 +608,11 @@ impl<'a> Parser<'a> {
         if self.peek(Semi)? {
             let last = self.expect(Semi)?;
             let span = signature.span.to(last.span);
-            Ok(TraitItem::Required { signature, span })
+            Ok(TraitItem::Required {
+                signature,
+                span,
+                id: HirId::new(),
+            })
         } else if self.peek(LBrace)? {
             let block = self.block()?;
             let span = signature.span.to(block.span);
@@ -612,6 +620,7 @@ impl<'a> Parser<'a> {
                 signature,
                 block,
                 span,
+                id: HirId::new(),
             })
         } else {
             Err(Error::Parse(
@@ -1671,6 +1680,7 @@ impl<'a> Parser<'a> {
                     is_pub,
                     signature,
                     span,
+                    id: HirId::new(),
                 })
             }
             Type => {
@@ -1707,6 +1717,7 @@ impl<'a> Parser<'a> {
                     name,
                     info,
                     span,
+                    id: HirId::new(),
                 })
             }
             Static => {
@@ -1728,6 +1739,7 @@ impl<'a> Parser<'a> {
                     name,
                     ty,
                     span,
+                    id: HirId::new(),
                 })
             }
             kind => Err(Error::Parse(
@@ -2202,6 +2214,7 @@ impl<'a> Parser<'a> {
             signature,
             block,
             span,
+            id: HirId::new(),
         })
     }
 

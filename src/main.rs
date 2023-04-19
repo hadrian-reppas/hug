@@ -37,10 +37,10 @@ fn compile(map: &mut io::FileMap) -> Result<(), error::Error> {
     };
 
     let tree = map.parse_all(main_path)?;
-    println!("self: {tree:#?}");
+    // println!("self: {tree:#?}");
 
     let std = map.parse_std()?;
-    println!("std: {std:#?}");
+    // println!("std: {std:#?}");
 
     let other_trees = HashMap::from([("std".to_string(), std)]);
     let lowered = ast_lowering::lower(tree, other_trees)?;

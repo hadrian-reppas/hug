@@ -88,6 +88,19 @@ impl<T: From<usize>> ImplFnInfo<T> {
 struct ImplTypeInfo<'a> {
     type_is_pub: bool,
     fn_spans: HashMap<&'a String, Span>,
+    constructor: &'static dyn Fn(usize) -> hir::ImplFnId,
+}
+
+fn extern_constructor(id: usize) -> hir::ImplFnId {
+    hir::ImplFnId::Extern(id.into())
+}
+
+fn struct_constructor(id: usize) -> hir::ImplFnId {
+    hir::ImplFnId::Struct(id.into())
+}
+
+fn enum_constructor(id: usize) -> hir::ImplFnId {
+    hir::ImplFnId::Enum(id.into())
 }
 
 fn next_id<T: From<usize>>() -> T {
@@ -99,7 +112,7 @@ fn next_id<T: From<usize>>() -> T {
 #[derive(Debug)]
 struct NameTree(HashMap<String, NameNode>);
 
-fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
+fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
     let mut map = HashMap::new();
     let mut prev_spans = HashMap::new();
     let mut impl_spans = HashMap::new();
@@ -123,13 +136,17 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
     for item in items {
         match item {
             ast::Item::Use { .. } => {}
-            ast::Item::Struct { is_pub, name, .. } => {
+            ast::Item::Struct {
+                is_pub, name, id, ..
+            } => {
                 check_redef!(name);
+                let new_id = next_id();
+                id.set(new_id);
                 map.insert(
                     name.name.clone(),
                     NameNode::Struct {
                         is_pub: *is_pub,
-                        id: next_id(),
+                        id: new_id,
                         impl_fns: HashMap::new(),
                     },
                 );
@@ -138,6 +155,7 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                     ImplTypeInfo {
                         type_is_pub: *is_pub,
                         fn_spans: HashMap::new(),
+                        constructor: &struct_constructor,
                     },
                 );
             }
@@ -145,6 +163,7 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                 is_pub,
                 name,
                 items,
+                id,
                 ..
             } => {
                 check_redef!(name);
@@ -165,15 +184,19 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                             )],
                         ));
                     }
+                    let new_id = next_id();
                     variant_spans.insert(&item.name.name, item.name.span);
-                    variants.insert(item.name.name.clone(), next_id());
+                    item.id.set(new_id);
+                    variants.insert(item.name.name.clone(), new_id);
                 }
 
+                let new_id = next_id();
+                id.set(new_id);
                 map.insert(
                     name.name.clone(),
                     NameNode::Enum {
                         is_pub: *is_pub,
-                        id: next_id(),
+                        id: new_id,
                         variants,
                         impl_fns: HashMap::new(),
                     },
@@ -183,6 +206,7 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                     ImplTypeInfo {
                         type_is_pub: *is_pub,
                         fn_spans: HashMap::new(),
+                        constructor: &enum_constructor,
                     },
                 );
             }
@@ -193,7 +217,7 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                 ..
             } => {
                 check_redef!(name);
-                let NameTree(items) = make_tree(&items[..])?;
+                let items = make_map(&items[..])?;
                 map.insert(
                     name.name.clone(),
                     NameNode::Mod {
@@ -206,24 +230,33 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                 for item in items {
                     match item {
                         ast::ExternItem::Fn {
-                            is_pub, signature, ..
+                            is_pub,
+                            signature,
+                            id,
+                            ..
                         } => {
                             check_redef!(signature.name);
+                            let new_id = next_id();
+                            id.set(new_id);
                             map.insert(
                                 signature.name.name.clone(),
                                 NameNode::ExternFn {
                                     is_pub: *is_pub,
-                                    id: next_id(),
+                                    id: new_id,
                                 },
                             );
                         }
-                        ast::ExternItem::Type { is_pub, name, .. } => {
+                        ast::ExternItem::Type {
+                            is_pub, name, id, ..
+                        } => {
                             check_redef!(name);
+                            let new_id = next_id();
+                            id.set(new_id);
                             map.insert(
                                 name.name.clone(),
                                 NameNode::ExternType {
                                     is_pub: *is_pub,
-                                    id: next_id(),
+                                    id: new_id,
                                     impl_fns: HashMap::new(),
                                 },
                             );
@@ -232,16 +265,21 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                                 ImplTypeInfo {
                                     type_is_pub: *is_pub,
                                     fn_spans: HashMap::new(),
+                                    constructor: &extern_constructor,
                                 },
                             );
                         }
-                        ast::ExternItem::Static { is_pub, name, .. } => {
+                        ast::ExternItem::Static {
+                            is_pub, name, id, ..
+                        } => {
                             check_redef!(name);
+                            let new_id = next_id();
+                            id.set(new_id);
                             map.insert(
                                 name.name.clone(),
-                                NameNode::Static {
+                                NameNode::ExternStatic {
                                     is_pub: *is_pub,
-                                    id: next_id(),
+                                    id: new_id,
                                 },
                             );
                         }
@@ -252,6 +290,7 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                 is_pub,
                 name,
                 items,
+                id,
                 ..
             } => {
                 check_redef!(name);
@@ -260,8 +299,8 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                 let mut trait_fns = HashMap::new();
                 for item in items {
                     match item {
-                        ast::TraitItem::Required { signature, .. }
-                        | ast::TraitItem::Provided { signature, .. } => {
+                        ast::TraitItem::Required { signature, id, .. }
+                        | ast::TraitItem::Provided { signature, id, .. } => {
                             if let Some(span) = fn_spans.get(&signature.name.name) {
                                 return Err(Error::Name(
                                     format!(
@@ -278,51 +317,68 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                                     )],
                                 ));
                             }
+                            let new_id = next_id();
+                            id.set(new_id);
                             fn_spans.insert(&signature.name.name, signature.name.span);
-                            trait_fns.insert(signature.name.name.clone(), next_id());
+                            trait_fns.insert(signature.name.name.clone(), new_id);
                         }
                     }
                 }
 
+                let new_id = next_id();
+                id.set(new_id);
                 map.insert(
                     name.name.clone(),
                     NameNode::Trait {
                         is_pub: *is_pub,
-                        id: next_id(),
+                        id: new_id,
                         trait_fns,
                     },
                 );
             }
             ast::Item::Fn {
-                is_pub, signature, ..
+                is_pub,
+                signature,
+                id,
+                ..
             } => {
                 check_redef!(signature.name);
+                let new_id = next_id();
+                id.set(new_id);
                 map.insert(
                     signature.name.name.clone(),
                     NameNode::Fn {
                         is_pub: *is_pub,
-                        id: next_id(),
+                        id: new_id,
                     },
                 );
             }
             ast::Item::Impl { .. } => {}
-            ast::Item::Const { is_pub, name, .. } => {
+            ast::Item::Const {
+                is_pub, name, id, ..
+            } => {
                 check_redef!(name);
+                let new_id = next_id();
+                id.set(new_id);
                 map.insert(
                     name.name.clone(),
                     NameNode::Const {
                         is_pub: *is_pub,
-                        id: next_id(),
+                        id: new_id,
                     },
                 );
             }
-            ast::Item::Static { is_pub, name, .. } => {
+            ast::Item::Static {
+                is_pub, name, id, ..
+            } => {
                 check_redef!(name);
+                let new_id = next_id();
+                id.set(new_id);
                 map.insert(
                     name.name.clone(),
                     NameNode::Static {
                         is_pub: *is_pub,
-                        id: next_id(),
+                        id: new_id,
                     },
                 );
             }
@@ -340,10 +396,14 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
             if let Some(ImplTypeInfo {
                 type_is_pub,
                 fn_spans,
+                constructor,
             }) = impl_spans.get_mut(&name.name)
             {
                 for ast::ImplFn {
-                    is_pub, signature, ..
+                    is_pub,
+                    signature,
+                    id,
+                    ..
                 } in fns
                 {
                     if let Some(span) = fn_spans.get(&signature.name.name) {
@@ -355,24 +415,25 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                                 Some(*span),
                             )],
                         ));
-                    } else {
-                        if *is_pub && !*type_is_pub {
-                            return Err(Error::Name(
-                                format!(
-                                    "function `{}` is declared pub on non-pub type `{}`",
-                                    signature.name.name, name.name
-                                ),
-                                signature.name.span,
-                                vec![],
-                            ));
-                        }
-                        fn_spans.insert(&signature.name.name, signature.name.span);
-                        map.get_mut(&name.name).unwrap().insert_impl_fn_id(
-                            signature.name.name.clone(),
-                            *is_pub,
-                            next_id(),
-                        );
                     }
+                    if *is_pub && !*type_is_pub {
+                        return Err(Error::Name(
+                            format!(
+                                "function `{}` is declared pub on non-pub type `{}`",
+                                signature.name.name, name.name
+                            ),
+                            signature.name.span,
+                            vec![],
+                        ));
+                    }
+                    let new_id = constructor(next_id());
+                    id.set(new_id);
+                    fn_spans.insert(&signature.name.name, signature.name.span);
+                    map.get_mut(&name.name).unwrap().insert_impl_fn_id(
+                        signature.name.name.clone(),
+                        *is_pub,
+                        new_id.into(),
+                    );
                 }
             } else {
                 return Err(Error::Name(
@@ -384,7 +445,7 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
         }
     }
 
-    Ok(NameTree(map))
+    Ok(map)
 }
 
 #[derive(Debug)]
@@ -397,7 +458,30 @@ pub fn lower(
     items: Vec<ast::Item>,
     other_items: HashMap<String, Vec<ast::Item>>,
 ) -> Result<Lowered, Error> {
-    let tree = make_tree(&items[..])?;
+    let mut map = HashMap::new();
+
+    map.insert(
+        "self".to_string(),
+        NameNode::Mod {
+            is_pub: true,
+            items: make_map(&items[..])?,
+        },
+    );
+
+    for (name, items) in &other_items {
+        map.insert(
+            name.clone(),
+            NameNode::Mod {
+                is_pub: true,
+                items: make_map(&items[..])?,
+            },
+        );
+    }
+
+    let tree = NameTree(map);
+
+    println!("items: {items:#?}");
     println!("tree: {tree:#?}");
+
     todo!()
 }
