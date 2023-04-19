@@ -88,20 +88,12 @@ impl<T: From<usize>> ImplFnInfo<T> {
 struct ImplTypeInfo<'a> {
     type_is_pub: bool,
     fn_spans: HashMap<&'a String, Span>,
-    counter: Counter,
 }
 
-struct Counter(usize);
-
-impl Counter {
-    fn new() -> Self {
-        Counter(0)
-    }
-
-    fn next<T: From<usize>>(&mut self) -> T {
-        self.0 += 1;
-        (self.0 - 1).into()
-    }
+fn next_id<T: From<usize>>() -> T {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+    COUNTER.fetch_add(1, Ordering::Relaxed).into()
 }
 
 #[derive(Debug)]
@@ -110,7 +102,6 @@ struct NameTree(HashMap<String, NameNode>);
 fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
     let mut map = HashMap::new();
     let mut prev_spans = HashMap::new();
-    let mut counter = Counter::new();
     let mut impl_spans = HashMap::new();
 
     macro_rules! check_redef {
@@ -138,7 +129,7 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                     name.name.clone(),
                     NameNode::Struct {
                         is_pub: *is_pub,
-                        id: counter.next(),
+                        id: next_id(),
                         impl_fns: HashMap::new(),
                     },
                 );
@@ -147,7 +138,6 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                     ImplTypeInfo {
                         type_is_pub: *is_pub,
                         fn_spans: HashMap::new(),
-                        counter: Counter::new(),
                     },
                 );
             }
@@ -159,7 +149,6 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
             } => {
                 check_redef!(name);
 
-                let mut variant_counter = Counter::new();
                 let mut variant_spans = HashMap::new();
                 let mut variants = HashMap::new();
                 for item in items {
@@ -177,14 +166,14 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                         ));
                     }
                     variant_spans.insert(&item.name.name, item.name.span);
-                    variants.insert(item.name.name.clone(), variant_counter.next());
+                    variants.insert(item.name.name.clone(), next_id());
                 }
 
                 map.insert(
                     name.name.clone(),
                     NameNode::Enum {
                         is_pub: *is_pub,
-                        id: counter.next(),
+                        id: next_id(),
                         variants,
                         impl_fns: HashMap::new(),
                     },
@@ -194,7 +183,6 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                     ImplTypeInfo {
                         type_is_pub: *is_pub,
                         fn_spans: HashMap::new(),
-                        counter: Counter::new(),
                     },
                 );
             }
@@ -225,7 +213,7 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                                 signature.name.name.clone(),
                                 NameNode::ExternFn {
                                     is_pub: *is_pub,
-                                    id: counter.next(),
+                                    id: next_id(),
                                 },
                             );
                         }
@@ -235,7 +223,7 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                                 name.name.clone(),
                                 NameNode::ExternType {
                                     is_pub: *is_pub,
-                                    id: counter.next(),
+                                    id: next_id(),
                                     impl_fns: HashMap::new(),
                                 },
                             );
@@ -244,7 +232,6 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                                 ImplTypeInfo {
                                     type_is_pub: *is_pub,
                                     fn_spans: HashMap::new(),
-                                    counter: Counter::new(),
                                 },
                             );
                         }
@@ -254,7 +241,7 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                                 name.name.clone(),
                                 NameNode::Static {
                                     is_pub: *is_pub,
-                                    id: counter.next(),
+                                    id: next_id(),
                                 },
                             );
                         }
@@ -269,7 +256,6 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
             } => {
                 check_redef!(name);
 
-                let mut fn_counter = Counter::new();
                 let mut fn_spans = HashMap::new();
                 let mut trait_fns = HashMap::new();
                 for item in items {
@@ -293,7 +279,7 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                                 ));
                             }
                             fn_spans.insert(&signature.name.name, signature.name.span);
-                            trait_fns.insert(signature.name.name.clone(), fn_counter.next());
+                            trait_fns.insert(signature.name.name.clone(), next_id());
                         }
                     }
                 }
@@ -302,7 +288,7 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                     name.name.clone(),
                     NameNode::Trait {
                         is_pub: *is_pub,
-                        id: counter.next(),
+                        id: next_id(),
                         trait_fns,
                     },
                 );
@@ -315,7 +301,7 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                     signature.name.name.clone(),
                     NameNode::Fn {
                         is_pub: *is_pub,
-                        id: counter.next(),
+                        id: next_id(),
                     },
                 );
             }
@@ -326,7 +312,7 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                     name.name.clone(),
                     NameNode::Const {
                         is_pub: *is_pub,
-                        id: counter.next(),
+                        id: next_id(),
                     },
                 );
             }
@@ -336,7 +322,7 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                     name.name.clone(),
                     NameNode::Static {
                         is_pub: *is_pub,
-                        id: counter.next(),
+                        id: next_id(),
                     },
                 );
             }
@@ -354,7 +340,6 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
             if let Some(ImplTypeInfo {
                 type_is_pub,
                 fn_spans,
-                counter,
             }) = impl_spans.get_mut(&name.name)
             {
                 for ast::ImplFn {
@@ -385,7 +370,7 @@ fn make_tree(items: &[ast::Item]) -> Result<NameTree, Error> {
                         map.get_mut(&name.name).unwrap().insert_impl_fn_id(
                             signature.name.name.clone(),
                             *is_pub,
-                            counter.next(),
+                            next_id(),
                         );
                     }
                 }
