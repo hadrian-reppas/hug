@@ -109,6 +109,7 @@ impl<'a> Tokens<'a> {
                 "break" => TokenKind::Break,
                 "const" => TokenKind::Const,
                 "continue" => TokenKind::Continue,
+                "crate" => TokenKind::Crate,
                 "else" => TokenKind::Else,
                 "enum" => TokenKind::Enum,
                 "extern" => TokenKind::Extern,
@@ -537,6 +538,7 @@ pub enum TokenKind {
     Break,
     Const,
     Continue,
+    Crate,
     Else,
     Enum,
     Extern,
@@ -612,6 +614,7 @@ impl TokenKind {
             TokenKind::As => "`as`",
             TokenKind::Break => "`break`",
             TokenKind::Const => "`const`",
+            TokenKind::Crate => "`crate`",
             TokenKind::Continue => "`continue`",
             TokenKind::Else => "`else`",
             TokenKind::Enum => "`enum`",
@@ -669,6 +672,7 @@ impl TokenKind {
                 | TokenKind::LParen
                 | TokenKind::LBrack
                 | TokenKind::LBrace
+                | TokenKind::Crate
                 | TokenKind::If
                 | TokenKind::While
                 | TokenKind::Match

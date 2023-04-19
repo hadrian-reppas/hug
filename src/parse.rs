@@ -120,7 +120,7 @@ impl<'a> Parser<'a> {
 
     fn ty(&mut self) -> Result<Ty, Error> {
         match self.peek_kind()? {
-            Ident => {
+            Ident | Crate => {
                 let path = self.path()?;
                 let (generic_args, span) = if self.peek(Lt)? {
                     let generic_args = self.generic_args()?;
@@ -286,25 +286,25 @@ impl<'a> Parser<'a> {
         self.disallow_pub(pub_span, Use)?;
 
         let first = self.expect(Use)?;
-        let self_span = if self.peek(SelfValue)? {
-            let self_span = self.expect(SelfValue)?.span;
+        let crate_span = if self.peek(Crate)? {
+            let crate_span = self.expect(Crate)?.span;
             self.expect(Colon)?;
             self.expect(Colon)?;
-            Some(self_span)
+            Some(crate_span)
         } else {
             None
         };
         let tree = self.use_tree()?;
         let last = self.expect(Semi)?;
         Ok(UnloadedItem::Use {
-            self_span,
+            crate_span,
             tree,
             span: first.span.to(last.span),
         })
     }
 
     fn use_tree(&mut self) -> Result<UseTree, Error> {
-        let prefix = self.path()?;
+        let prefix = self.pure_path()?;
         if self.consume([Colon, Colon, LBrace])? {
             if self.peek(RBrace)? {
                 let last = self.expect(RBrace)?;
@@ -1442,6 +1442,15 @@ impl<'a> Parser<'a> {
     }
 
     fn generic_path(&mut self) -> Result<GenericPath, Error> {
+        let crate_span = if self.peek(Crate)? {
+            let crate_span = self.expect(Crate)?.span;
+            self.expect(Colon)?;
+            self.expect(Colon)?;
+            Some(crate_span)
+        } else {
+            None
+        };
+
         let mut segments = vec![self.generic_segment()?];
         while self.peek([Colon, Colon, Ident])? {
             let first_colon = self.expect(Colon)?;
@@ -1451,7 +1460,11 @@ impl<'a> Parser<'a> {
         }
 
         let span = segments[0].span.to(segments.last().unwrap().span);
-        Ok(GenericPath { segments, span })
+        Ok(GenericPath {
+            crate_span,
+            segments,
+            span,
+        })
     }
 
     fn generic_segment(&mut self) -> Result<GenericSegment, Error> {
@@ -1903,7 +1916,7 @@ impl<'a> Parser<'a> {
         if self.peek(Under)? {
             let span = self.expect(Under)?.span;
             Ok(Pattern::Wild { span })
-        } else if self.peek(Ident)? {
+        } else if self.peek(Ident)? || self.peek(Crate)? {
             let path = self.path()?;
             if self.peek(LBrace)? {
                 self.struct_pattern(path)
@@ -2292,6 +2305,15 @@ impl<'a> Parser<'a> {
     }
 
     fn path(&mut self) -> Result<Path, Error> {
+        let crate_span = if self.peek(Crate)? {
+            let crate_span = self.expect(Crate)?.span;
+            self.expect(Colon)?;
+            self.expect(Colon)?;
+            Some(crate_span)
+        } else {
+            None
+        };
+
         let mut path = vec![self.name()?];
         while self.peek([Colon, Colon, Ident])? {
             self.expect(Colon)?;
@@ -2299,7 +2321,18 @@ impl<'a> Parser<'a> {
             path.push(self.name()?);
         }
         let span = path[0].span.to(path.last().unwrap().span);
-        Ok(Path { path, span })
+        Ok(Path { crate_span, path, span })
+    }
+
+    fn pure_path(&mut self) -> Result<PurePath, Error> {
+        let mut path = vec![self.name()?];
+        while self.peek([Colon, Colon, Ident])? {
+            self.expect(Colon)?;
+            self.expect(Colon)?;
+            path.push(self.name()?);
+        }
+        let span = path[0].span.to(path.last().unwrap().span);
+        Ok(PurePath { path, span })
     }
 }
 
@@ -2324,9 +2357,9 @@ impl Sequence for TokenKind {
             Ident, Under, Int, Float, Char, String, ByteString, Byte, Semi, Comma, Dot, LParen,
             RParen, LBrace, RBrace, LBrack, RBrack, At, Tilde, QMark, Colon, Eq, Bang, Lt, Gt,
             Dash, Plus, Star, Slash, Caret, Percent, Amp, Bar, And, As, Break, Const, Continue,
-            Else, Enum, Extern, False, Fn, For, Goto, If, Impl, In, Let, Loop, Match, Mod, Mut,
-            Not, Or, Pub, Return, SelfType, SelfValue, Static, Struct, Trait, Try, True, Type,
-            Unique, Use, Where, While, Eof,
+            Crate, Else, Enum, Extern, False, Fn, For, Goto, If, Impl, In, Let, Loop, Match, Mod,
+            Mut, Not, Or, Pub, Return, SelfType, SelfValue, Static, Struct, Trait, Try, True,
+            Type, Unique, Use, Where, While, Eof,
         }
     }
 }

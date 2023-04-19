@@ -16,6 +16,13 @@ impl Debug for Name {
 
 #[derive(Debug)]
 pub struct Path {
+    pub crate_span: Option<Span>,
+    pub path: Vec<Name>,
+    pub span: Span,
+}
+
+#[derive(Debug)]
+pub struct PurePath {
     pub path: Vec<Name>,
     pub span: Span,
 }
@@ -81,7 +88,7 @@ pub struct GenericArgs {
 #[derive(Debug)]
 pub enum UnloadedItem {
     Use {
-        self_span: Option<Span>,
+        crate_span: Option<Span>,
         tree: UseTree,
         span: Span,
     },
@@ -168,7 +175,7 @@ impl UnloadedItem {
 #[derive(Debug)]
 pub enum Item {
     Use {
-        self_span: Option<Span>,
+        crate_span: Option<Span>,
         tree: UseTree,
         span: Span,
     },
@@ -264,11 +271,11 @@ impl TryFrom<UnloadedItem> for Item {
     fn try_from(item: UnloadedItem) -> Result<Item, (bool, Name, Span)> {
         match item {
             UnloadedItem::Use {
-                self_span,
+                crate_span,
                 tree,
                 span,
             } => Ok(Item::Use {
-                self_span,
+                crate_span,
                 tree,
                 span,
             }),
@@ -383,7 +390,7 @@ impl TryFrom<UnloadedItem> for Item {
 
 #[derive(Debug)]
 pub struct UseTree {
-    pub prefix: Path,
+    pub prefix: PurePath,
     pub kind: UseTreeKind,
     pub span: Span,
 }
@@ -583,7 +590,7 @@ pub enum Stmt {
         span: Span,
     },
     Use {
-        self_span: Option<Span>,
+        crate_span: Option<Span>,
         tree: UseTree,
         span: Span,
     },
@@ -656,11 +663,11 @@ impl TryFrom<UnloadedItem> for Stmt {
     fn try_from(item: UnloadedItem) -> Result<Stmt, ()> {
         match item {
             UnloadedItem::Use {
-                self_span,
+                crate_span,
                 tree,
                 span,
             } => Ok(Stmt::Use {
-                self_span,
+                crate_span,
                 tree,
                 span,
             }),
@@ -988,6 +995,7 @@ impl Expr {
 
 #[derive(Debug)]
 pub struct GenericPath {
+    pub crate_span: Option<Span>,
     pub segments: Vec<GenericSegment>,
     pub span: Span,
 }
