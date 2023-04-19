@@ -1,0 +1,28 @@
+use std::primitives::usize;
+
+pub struct Slice<T> {
+    ptr: *T,
+    len: usize,
+}
+
+impl Slice<T> {
+    pub fn as_ptr(self) -> *T {
+        self.ptr
+    }
+
+    pub fn len(self) -> usize {
+        self.len
+    }
+}
+
+impl Slice<T> as Copy {}
+
+impl Slice<T> as Index<usize, T> {
+    fn index(*self, index: usize) -> *T {
+        if index < self.len {
+            self.ptr + index
+        } else {
+            panic!("index {} is out of bounds for slice of length {}", index, self.len);
+        }
+    }
+}

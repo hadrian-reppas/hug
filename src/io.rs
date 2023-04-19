@@ -15,6 +15,7 @@ lazy_static::lazy_static! {
         (vec!["collections"], (include_str!("../std/collections/mod.hug"), true)),
         (vec!["collections", "hash_map"], (include_str!("../std/collections/hash_map.hug"), false)),
         (vec!["fmt"], (include_str!("../std/fmt.hug"), false)),
+        (vec!["slice"], (include_str!("../std/slice.hug"), false)),
     ]);
 }
 
