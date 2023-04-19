@@ -1,10 +1,13 @@
 mod ast;
+mod ast_lowering;
 mod error;
+mod hir;
 mod io;
 mod lex;
 mod parse;
 mod span;
 
+use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -38,6 +41,10 @@ fn compile(map: &mut io::FileMap) -> Result<(), error::Error> {
 
     let std = map.parse_std()?;
     println!("std: {std:#?}");
+
+    let other_trees = HashMap::from([("std".to_string(), std)]);
+    let lowered = ast_lowering::lower(tree, other_trees)?;
+    println!("lowered: {lowered:#?}");
 
     todo!()
 }

@@ -9,6 +9,7 @@ pub enum Error {
     Lex(String, Span, Vec<Note>),
     Parse(String, Span, Vec<Note>),
     Io(String, Option<Span>, Vec<Note>),
+    Name(String, Span, Vec<Note>),
 }
 
 impl Error {
@@ -70,6 +71,23 @@ impl Error {
                     writeln!(out)?;
                     span.write(out, color, map)?;
                 }
+
+                for note in notes {
+                    writeln!(out)?;
+                    note.write(out, color, map)?;
+                }
+                Ok(())
+            }
+            Error::Name(msg, span, notes) => {
+                writeln!(
+                    out,
+                    "{}name error:{} {}",
+                    color!(Red, color),
+                    reset!(color),
+                    msg
+                )?;
+
+                span.write(out, color, map)?;
 
                 for note in notes {
                     writeln!(out)?;
