@@ -1,5 +1,16 @@
-pub mod option;
-pub mod result;
-pub mod fmt;
-pub mod collections;
-pub mod slice;
+pub fn drop<T>(x: T) { x.drop(); }
+
+pub enum Option<T> {
+    Some(T),
+    None,
+}
+
+pub trait Clone {
+    fn clone(*self) -> Self;
+}
+
+// pub mod option;
+// pub mod result;
+// pub mod fmt;
+// pub mod collections;
+// pub mod slice;
