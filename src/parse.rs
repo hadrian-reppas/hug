@@ -2321,7 +2321,11 @@ impl<'a> Parser<'a> {
             path.push(self.name()?);
         }
         let span = path[0].span.to(path.last().unwrap().span);
-        Ok(Path { crate_span, path, span })
+        Ok(Path {
+            crate_span,
+            path,
+            span,
+        })
     }
 
     fn pure_path(&mut self) -> Result<PurePath, Error> {

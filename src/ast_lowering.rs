@@ -456,7 +456,7 @@ struct Resolver<'a> {
 fn resolve(
     items: Vec<ast::Item>,
     resolver: &mut Resolver,
-    self_name: &str,
+    current_name: &str,
 ) -> Result<Vec<hir::Item>, Error> {
     let mut hir_items = Vec::new();
 
@@ -488,7 +488,7 @@ pub fn lower(
     let mut map = HashMap::new();
 
     map.insert(
-        "self".to_string(),
+        "crate".to_string(),
         NameNode::Mod {
             is_pub: true,
             items: make_map(&items[..])?,
@@ -505,12 +505,15 @@ pub fn lower(
         );
     }
 
+    println!("map: {map:#?}");
+    println!("items: {items:#?}");
+
     let mut resolver = Resolver {
         global: NameTree(map),
         stack: Vec::new(),
     };
 
-    let mut lowered_items = resolve(items, &mut resolver, "self")?;
+    let mut lowered_items = resolve(items, &mut resolver, "crate")?;
     for (name, items) in other_items {
         lowered_items.append(&mut resolve(items, &mut resolver, &name)?);
     }

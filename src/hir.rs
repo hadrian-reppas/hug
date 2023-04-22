@@ -39,7 +39,6 @@ id!(TraitFnId);
 id!(ConstId);
 id!(StaticId);
 
-#[derive(Debug)]
 pub struct HirId<T>(OnceCell<T>);
 
 impl<T: Copy + Debug> HirId<T> {
@@ -53,6 +52,17 @@ impl<T: Copy + Debug> HirId<T> {
 
     pub fn get(&self) -> T {
         *self.0.get().unwrap()
+    }
+}
+
+impl<T: Copy + Into<usize>> std::fmt::Debug for HirId<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(&id) = self.0.get() {
+            let id: usize = id.into();
+            write!(f, "{}", id)
+        } else {
+            write!(f, "Uninit")
+        }
     }
 }
 
