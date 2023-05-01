@@ -7,15 +7,27 @@ use crate::error::{Error, Note};
 use crate::parse;
 use crate::span::Span;
 
+macro_rules! std_file {
+    ($($path:expr),* $(,)?) => {
+        (vec![$($path),*], (include_str!(concat!("../std", $("/", $path),*, ".hug")), false))
+    };
+}
+
+macro_rules! std_mod {
+    ($($path:expr),* $(,)?) => {
+        (vec![$($path),*], (include_str!(concat!("../std", $("/", $path),*, "/mod.hug")), true))
+    };
+}
+
 lazy_static::lazy_static! {
     static ref STD_MAP: HashMap<Vec<&'static str>, (&'static str, bool)> = HashMap::from([
-        (vec!["lib"], (include_str!("../std/lib.hug"), false)),
-        (vec!["option"], (include_str!("../std/option.hug"), false)),
-        (vec!["result"], (include_str!("../std/result.hug"), false)),
-        (vec!["collections"], (include_str!("../std/collections/mod.hug"), true)),
-        (vec!["collections", "hash_map"], (include_str!("../std/collections/hash_map.hug"), false)),
-        (vec!["fmt"], (include_str!("../std/fmt.hug"), false)),
-        (vec!["slice"], (include_str!("../std/slice.hug"), false)),
+        std_file!("lib"),
+        std_file!("option"),
+        std_file!("result"),
+        std_mod!("collections"),
+        std_file!("collections", "hash_map"),
+        std_file!("fmt"),
+        std_file!("slice"),
     ]);
 }
 
