@@ -29,11 +29,7 @@ fn compile(map: &mut io::FileMap) -> Result<(), error::Error> {
     let main_path: PathBuf = if args.len() == 2 {
         args.pop().unwrap().into()
     } else {
-        return Err(Error::Io(
-            "invalid arguments".to_string(),
-            None,
-            vec![Note::new("usage is `hug <filepath>`".to_string(), None)],
-        ));
+        return Err(Error::new("invalid arguments", None).note("usage is `hug <filepath>`", None));
     };
 
     let tree = map.parse_all(main_path)?;

@@ -143,10 +143,9 @@ impl<'a> Tokens<'a> {
                 "while" => TokenKind::While,
                 "_" => TokenKind::Under,
                 name if name.chars().all(|c| c == '_') => {
-                    return Err(Error::Lex(
-                        format!("illegal identifier `{}`", name),
-                        self.make_span(len),
-                        vec![],
+                    return Err(Error::new(
+                        format!("illegal identifier `{name}`"),
+                        Some(self.make_span(len)),
                     ))
                 }
                 _ => TokenKind::Ident,
@@ -227,10 +226,9 @@ impl<'a> Tokens<'a> {
             self.lex_number()
         } else {
             let c = self.suffix.chars().next().unwrap();
-            Err(Error::Lex(
-                format!("unexpected character {:?}", c),
-                self.make_span(1),
-                vec![],
+            Err(Error::new(
+                format!("unexpected character {c:?}"),
+                Some(self.make_span(1)),
             ))
         }
     }
@@ -262,14 +260,11 @@ impl<'a> Tokens<'a> {
                         span,
                     })
                 } else if is_float {
-                    Err(Error::Lex(
+                    Err(Error::new(
                         format!("invalid suffix `{}` for float literal", mat.as_str()),
-                        span,
-                        vec![Note::new(
-                            "valid suffixes are `f32` and `f64`".to_string(),
-                            None,
-                        )],
-                    ))
+                        Some(span),
+                    )
+                    .note("valid suffixes are `f32` and `f64`", None))
                 } else {
                     Ok(Token {
                         kind: TokenKind::Int,
@@ -277,23 +272,19 @@ impl<'a> Tokens<'a> {
                     })
                 }
             } else if is_float {
-                Err(Error::Lex(
+                Err(Error::new(
                     format!("invalid suffix `{}` for float literal", mat.as_str()),
-                    span,
-                    vec![Note::new(
-                        "valid suffixes are `f32` and `f64`".to_string(),
-                        None,
-                    )],
-                ))
+                    Some(span),
+                )
+                .note("valid suffixes are `f32` and `f64`", None))
             } else {
-                Err(Error::Lex(
+                Err(Error::new(
                     format!("invalid suffix `{}` for number literal", mat.as_str()),
-                    span,
-                    vec![Note::new(
-                        "the suffix must be one of the numeric types (`i32`, `usize`, `f32`, etc.)"
-                            .to_string(),
-                        None,
-                    )],
+                    Some(span),
+                )
+                .note(
+                    "the suffix must be one of the numeric types (`i32`, `usize`, `f32`, etc.)",
+                    None,
                 ))
             }
         } else if is_float {
@@ -317,18 +308,13 @@ impl<'a> Tokens<'a> {
                     span: self.make_span(len + 2),
                 })
             } else {
-                Err(Error::Lex(
-                    "unterminated char literal".to_string(),
-                    self.make_span(1),
-                    vec![],
+                Err(Error::new(
+                    "unterminated char literal",
+                    Some(self.make_span(1)),
                 ))
             }
         } else {
-            Err(Error::Lex(
-                "empty char literal".to_string(),
-                self.make_span(2),
-                vec![],
-            ))
+            Err(Error::new("empty char literal", Some(self.make_span(2))))
         }
     }
 
@@ -352,18 +338,13 @@ impl<'a> Tokens<'a> {
                     span: self.make_span(len + 3),
                 })
             } else {
-                Err(Error::Lex(
-                    "unterminated byte literal".to_string(),
-                    self.make_span(2),
-                    vec![],
+                Err(Error::new(
+                    "unterminated byte literal",
+                    Some(self.make_span(2)),
                 ))
             }
         } else {
-            Err(Error::Lex(
-                "empty byte literal".to_string(),
-                self.make_span(3),
-                vec![],
-            ))
+            Err(Error::new("empty byte literal", Some(self.make_span(3))))
         }
     }
 
@@ -415,27 +396,18 @@ impl<'a> Tokens<'a> {
                     Some(c) if c == end => Ok(Some(2)),
                     Some(unknown) => {
                         self.make_span(len);
-                        Err(Error::Lex(
+                        Err(Error::new(
                             format!("unknown escape character {unknown:?}"),
-                            self.make_span(1 + unknown.len_utf8()),
-                            vec![],
+                            Some(self.make_span(1 + unknown.len_utf8())),
                         ))
                     }
-                    None => Err(Error::Lex(
-                        unterminated_msg.to_string(),
-                        self.make_span(1),
-                        vec![],
-                    )),
+                    None => Err(Error::new(unterminated_msg, Some(self.make_span(1)))),
                 }
             } else {
                 Ok(Some(c.len_utf8()))
             }
         } else {
-            Err(Error::Lex(
-                unterminated_msg.to_string(),
-                self.make_span(1),
-                vec![],
-            ))
+            Err(Error::new(unterminated_msg, Some(self.make_span(1))))
         }
     }
 
@@ -452,10 +424,9 @@ impl<'a> Tokens<'a> {
                 let offset = if suffix.len() > 2 + i { 3 } else { 2 };
 
                 self.make_span(len);
-                return Err(Error::Lex(
+                return Err(Error::new(
                     format!("'\\{escape}' must be followed by {n} hex digits"),
-                    self.make_span(offset + i),
-                    vec![],
+                    Some(self.make_span(offset + i)),
                 ));
             }
         }
@@ -463,22 +434,17 @@ impl<'a> Tokens<'a> {
         let i = u32::from_str_radix(&suffix[2..(2 + n)], 16).unwrap();
         if escape == 'x' && !byte && i > 0x7f {
             self.make_span(len);
-            Err(Error::Lex(
-                "invalid hex escape".to_string(),
-                self.make_span(2 + n),
-                vec![Note::new(
-                    "hex escapes must be in the range [\\x00-\\x7f]".to_string(),
-                    None,
-                )],
-            ))
+            Err(
+                Error::new("invalid hex escape", Some(self.make_span(2 + n)))
+                    .note("hex escapes must be in the range [\\x00-\\x7f]", None),
+            )
         } else if char::from_u32(i).is_some() {
             Ok(())
         } else {
             self.make_span(len);
-            Err(Error::Lex(
-                "invalid unicode code point".to_string(),
-                self.make_span(2 + n),
-                vec![],
+            Err(Error::new(
+                "invalid unicode code point",
+                Some(self.make_span(2 + n)),
             ))
         }
     }

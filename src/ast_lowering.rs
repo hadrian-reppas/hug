@@ -120,13 +120,13 @@ fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
     macro_rules! check_redef {
         ($name:expr) => {{
             if let Some(&prev_span) = prev_spans.get(&$name.name) {
-                return Err(Error::Name(
+                return Err(Error::new(
                     format!("the name `{}` is defined multiple times", $name.name),
-                    $name.span,
-                    vec![Note::new(
-                        format!("previous definition of `{}` is here", $name.name),
-                        Some(prev_span),
-                    )],
+                    Some($name.span),
+                )
+                .note(
+                    format!("previous definition of `{}` is here", $name.name),
+                    Some(prev_span),
                 ));
             }
             prev_spans.insert(&$name.name, $name.span);
@@ -172,16 +172,16 @@ fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                 let mut variants = HashMap::new();
                 for item in items {
                     if let Some(span) = variant_spans.get(&item.name.name) {
-                        return Err(Error::Name(
+                        return Err(Error::new(
                             format!(
                                 "the name `{}` is defined multiple times in this enum",
                                 item.name.name
                             ),
-                            item.name.span,
-                            vec![Note::new(
-                                format!("previous definition of `{}` is here", item.name.name),
-                                Some(*span),
-                            )],
+                            Some(item.name.span),
+                        )
+                        .note(
+                            format!("previous definition of `{}` is here", item.name.name),
+                            Some(*span),
                         ));
                     }
                     let new_id = next_id();
@@ -302,19 +302,19 @@ fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                         ast::TraitItem::Required { signature, id, .. }
                         | ast::TraitItem::Provided { signature, id, .. } => {
                             if let Some(span) = fn_spans.get(&signature.name.name) {
-                                return Err(Error::Name(
+                                return Err(Error::new(
                                     format!(
                                         "the function `{}` is defined multiple times in this trait",
                                         signature.name.name
                                     ),
-                                    signature.name.span,
-                                    vec![Note::new(
-                                        format!(
-                                            "previous definition of `{}` is here",
-                                            signature.name.name
-                                        ),
-                                        Some(*span),
-                                    )],
+                                    Some(signature.name.span),
+                                )
+                                .note(
+                                    format!(
+                                        "previous definition of `{}` is here",
+                                        signature.name.name
+                                    ),
+                                    Some(*span),
                                 ));
                             }
                             let new_id = next_id();
@@ -407,23 +407,22 @@ fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                 } in fns
                 {
                     if let Some(span) = fn_spans.get(&signature.name.name) {
-                        return Err(Error::Name(
+                        return Err(Error::new(
                             format!("duplicate definitions with name `{}`", signature.name.name),
-                            signature.name.span,
-                            vec![Note::new(
-                                format!("previous definition of `{}` is here", signature.name.name),
-                                Some(*span),
-                            )],
+                            Some(signature.name.span),
+                        )
+                        .note(
+                            format!("previous definition of `{}` is here", signature.name.name),
+                            Some(*span),
                         ));
                     }
                     if *is_pub && !*type_is_pub {
-                        return Err(Error::Name(
+                        return Err(Error::new(
                             format!(
                                 "function `{}` is declared pub on non-pub type `{}`",
                                 signature.name.name, name.name
                             ),
-                            signature.name.span,
-                            vec![],
+                            Some(signature.name.span),
                         ));
                     }
                     let new_id = constructor(next_id());
@@ -436,10 +435,9 @@ fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                     );
                 }
             } else {
-                return Err(Error::Name(
+                return Err(Error::new(
                     format!("no type `{}` in this file", name.name),
-                    name.span,
-                    vec![],
+                    Some(name.span),
                 ));
             }
         }

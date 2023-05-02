@@ -40,7 +40,7 @@ impl FileMap {
 
     fn load(&mut self, path: PathBuf) -> Result<FileId, Error> {
         let code = fs::read_to_string(&path)
-            .map_err(|_| Error::Io(format!("couldn't read file {:?}", path), None, vec![]))?;
+            .map_err(|_| Error::new(format!("couldn't read file {path:?}"), None))?;
         let id = FileId(self.0.len());
         self.0.push(FileInfo { code, path });
         Ok(id)
@@ -72,10 +72,9 @@ impl FileMap {
         let (code, is_mod) = if let Some((code, is_mod)) = STD_MAP.get(path) {
             (code.to_string(), *is_mod)
         } else {
-            return Err(Error::Io(
+            return Err(Error::new(
                 format!("no standard library file {path_buf:?}"),
                 None,
-                vec![],
             ));
         };
         let id = FileId(self.0.len());
@@ -137,11 +136,7 @@ impl FileMap {
         prefix: &Path,
     ) -> Result<Item, Error> {
         if name.name == "std" {
-            return Err(Error::Parse(
-                "module name `std` is reserved".to_string(),
-                name.span,
-                vec![],
-            ));
+            return Err(Error::new("module name `std` is reserved", Some(name.span)));
         }
 
         let mut file_path = prefix.to_path_buf();
@@ -152,13 +147,12 @@ impl FileMap {
         mod_path.push("mod.hug");
 
         if file_path.is_file() && mod_path.is_file() {
-            Err(Error::Io(
+            Err(Error::new(
                 format!(
-                    "file for module `{}` found at both {:?} and {:?}",
-                    name.name, file_path, mod_path
+                    "file for module `{}` found at both {file_path:?} and {mod_path:?}",
+                    name.name,
                 ),
                 Some(name.span),
-                vec![],
             ))
         } else if file_path.is_file() {
             let mut file_items = Vec::new();
@@ -166,11 +160,9 @@ impl FileMap {
                 match Item::try_from(item) {
                     Ok(item) => file_items.push(item),
                     Err((_, _, span)) => {
-                        return Err(Error::Io(
-                            "mod items are only allowed in the main file and \"mod.hug\" files"
-                                .to_string(),
+                        return Err(Error::new(
+                            "mod items are only allowed in the main file and \"mod.hug\" files",
                             Some(span),
-                            vec![],
                         ))
                     }
                 }
@@ -192,16 +184,16 @@ impl FileMap {
                 span,
             })
         } else {
-            Err(Error::Io(
+            Err(Error::new(
                 format!("file not found for module `{}`", name.name),
                 Some(name.span),
-                vec![Note::new(
-                    format!(
-                        "to create the module `{}`, create file {file_path:?} or {mod_path:?}",
-                        name.name
-                    ),
-                    None,
-                )],
+            )
+            .note(
+                format!(
+                    "to create the module `{}`, create file {file_path:?} or {mod_path:?}",
+                    name.name
+                ),
+                None,
             ))
         }
     }
@@ -225,11 +217,9 @@ impl FileMap {
                     if is_mod {
                         items.push(self.handle_std_mod(is_pub, name, span, &path)?)
                     } else {
-                        return Err(Error::Io(
-                            "mod items are only allowed in the main file and \"mod.hug\" files"
-                                .to_string(),
+                        return Err(Error::new(
+                            "mod items are only allowed in the main file and \"mod.hug\" files",
                             Some(span),
-                            vec![],
                         ));
                     }
                 }

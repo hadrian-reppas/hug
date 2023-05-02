@@ -38,10 +38,9 @@ impl<'a> Parser<'a> {
         if token.kind == expected {
             Ok(token)
         } else {
-            Err(Error::Parse(
+            Err(Error::new(
                 format!("expected {}, found {}", expected.desc(), token.kind.desc()),
-                token.span,
-                vec![],
+                Some(token.span),
             ))
         }
     }
@@ -110,10 +109,9 @@ impl<'a> Parser<'a> {
             Use => self.use_decl(pub_span),
             Mod => self.module(pub_span),
             Extern => self.extern_block(pub_span),
-            kind => Err(Error::Parse(
+            kind => Err(Error::new(
                 format!("expected item, found {}", kind.desc()),
-                self.peek_span()?,
-                vec![],
+                Some(self.peek_span()?),
             )),
         }
     }
@@ -196,15 +194,14 @@ impl<'a> Parser<'a> {
                         span,
                     })
                 } else {
-                    Err(Error::Parse(
+                    Err(Error::new(
                         format!(
                             "expected {} or {}, found {}",
                             RBrack.desc(),
                             Semi.desc(),
                             self.peek_kind()?.desc()
                         ),
-                        self.peek_span()?,
-                        vec![],
+                        Some(self.peek_span()?),
                     ))
                 }
             }
@@ -250,10 +247,9 @@ impl<'a> Parser<'a> {
             Bang => Ok(Ty::Never {
                 span: self.expect(Bang)?.span,
             }),
-            kind => Err(Error::Parse(
+            kind => Err(Error::new(
                 format!("expected type, found {}", kind.desc()),
-                self.peek_span()?,
-                vec![],
+                Some(self.peek_span()?),
             )),
         }
     }
@@ -594,13 +590,13 @@ impl<'a> Parser<'a> {
 
     fn trait_item(&mut self) -> Result<TraitItem, Error> {
         if self.peek(Pub)? {
-            return Err(Error::Parse(
+            return Err(Error::new(
                 format!("{} not permitted here", Pub.desc()),
-                self.peek_span()?,
-                vec![Note::new(
-                    format!("{} is implied for trait functions", Pub.desc()),
-                    None,
-                )],
+                Some(self.peek_span()?),
+            )
+            .note(
+                format!("{} is implied for trait functions", Pub.desc()),
+                None,
             ));
         }
 
@@ -623,14 +619,13 @@ impl<'a> Parser<'a> {
                 id: HirId::new(),
             })
         } else {
-            Err(Error::Parse(
+            Err(Error::new(
                 format!(
                     "expected block or {} after signature, found {}",
                     Semi.desc(),
                     self.peek_kind()?.desc()
                 ),
-                self.peek_span()?,
-                vec![],
+                Some(self.peek_span()?),
             ))
         }
     }
@@ -665,15 +660,14 @@ impl<'a> Parser<'a> {
                         let span = expr.span();
                         stmts.push(Stmt::Expr { expr, span });
                     } else {
-                        return Err(Error::Parse(
+                        return Err(Error::new(
                             format!(
                                 "expected {} or {} after expression, found {}",
                                 Semi.desc(),
                                 RBrace.desc(),
                                 self.peek_kind()?.desc()
                             ),
-                            self.peek_span()?,
-                            vec![],
+                            Some(self.peek_span()?),
                         ));
                     }
                 }
@@ -875,11 +869,10 @@ impl<'a> Parser<'a> {
                 if self.peek_kind()?.is_expr_start() {
                     let high = self.expr(BindingPower::Range, allow_struct)?;
                     if high.is_range() {
-                        return Err(Error::Parse(
-                            "range bounds cannot be ranges".to_string(),
-                            high.span(),
-                            vec![Note::new("consider adding parentheses".to_string(), None)],
-                        ));
+                        return Err(
+                            Error::new("range bounds cannot be ranges", Some(high.span()))
+                                .note("consider adding parentheses", None),
+                        );
                     }
                     let span = range_span.to(high.span());
                     Expr::Range {
@@ -899,10 +892,9 @@ impl<'a> Parser<'a> {
             }
 
             kind => {
-                return Err(Error::Parse(
+                return Err(Error::new(
                     format!("expected expression, found {}", kind.desc()),
-                    self.peek_span()?,
-                    vec![],
+                    Some(self.peek_span()?),
                 ))
             }
         };
@@ -919,11 +911,11 @@ impl<'a> Parser<'a> {
                     let span = lhs.span().to(rhs.span());
 
                     if is_cmp && (lhs.is_cmp() || rhs.is_cmp()) {
-                        return Err(Error::Parse(
-                            "comparison operators cannot be chained".to_string(),
-                            span,
-                            vec![Note::new("consider adding parentheses".to_string(), None)],
-                        ));
+                        return Err(Error::new(
+                            "comparison operators cannot be chained",
+                            Some(span),
+                        )
+                        .note("consider adding parentheses", None));
                     }
 
                     Expr::Binary {
@@ -956,11 +948,11 @@ impl<'a> Parser<'a> {
                 }
                 OpInfo::Call => {
                     if lhs.is_cast() {
-                        return Err(Error::Parse(
-                            "cast cannot be followed by a call".to_string(),
-                            lhs.span(),
-                            vec![Note::new("consider adding parentheses".to_string(), None)],
-                        ));
+                        return Err(Error::new(
+                            "cast cannot be followed by a call",
+                            Some(lhs.span()),
+                        )
+                        .note("consider adding parentheses", None));
                     }
 
                     if self.peek(RParen)? {
@@ -989,11 +981,11 @@ impl<'a> Parser<'a> {
                 }
                 OpInfo::MethodCall => {
                     if lhs.is_cast() {
-                        return Err(Error::Parse(
-                            "cast cannot be followed by a method call".to_string(),
-                            lhs.span(),
-                            vec![Note::new("consider adding parentheses".to_string(), None)],
-                        ));
+                        return Err(Error::new(
+                            "cast cannot be followed by a method call",
+                            Some(lhs.span()),
+                        )
+                        .note("consider adding parentheses", None));
                     }
 
                     let name = self.generic_segment()?;
@@ -1026,11 +1018,11 @@ impl<'a> Parser<'a> {
                 }
                 OpInfo::Index => {
                     if lhs.is_cast() {
-                        return Err(Error::Parse(
-                            "cast cannot be followed by indexing".to_string(),
-                            lhs.span(),
-                            vec![Note::new("consider adding parentheses".to_string(), None)],
-                        ));
+                        return Err(Error::new(
+                            "cast cannot be followed by indexing",
+                            Some(lhs.span()),
+                        )
+                        .note("consider adding parentheses", None));
                     }
 
                     let index = self.expr(BindingPower::Start, true)?;
@@ -1044,11 +1036,11 @@ impl<'a> Parser<'a> {
                 }
                 OpInfo::Field => {
                     if lhs.is_cast() {
-                        return Err(Error::Parse(
-                            "cast cannot be followed by a field access".to_string(),
-                            lhs.span(),
-                            vec![Note::new("consider adding parentheses".to_string(), None)],
-                        ));
+                        return Err(Error::new(
+                            "cast cannot be followed by a field access",
+                            Some(lhs.span()),
+                        )
+                        .note("consider adding parentheses", None));
                     }
 
                     if self.peek(Ident)? {
@@ -1068,15 +1060,14 @@ impl<'a> Parser<'a> {
                             span,
                         }
                     } else {
-                        return Err(Error::Parse(
+                        return Err(Error::new(
                             format!(
                                 "expected {} or {}, found {}",
                                 Ident.desc(),
                                 Int.desc(),
                                 self.peek_kind()?.desc()
                             ),
-                            self.peek_span()?,
-                            vec![],
+                            Some(self.peek_span()?),
                         ));
                     }
                 }
@@ -1091,21 +1082,20 @@ impl<'a> Parser<'a> {
                 }
                 OpInfo::Range { range_span } => {
                     if lhs.is_range() {
-                        return Err(Error::Parse(
-                            "range bounds cannot be ranges".to_string(),
-                            lhs.span(),
-                            vec![Note::new("consider adding parentheses".to_string(), None)],
-                        ));
+                        return Err(
+                            Error::new("range bounds cannot be ranges", Some(lhs.span()))
+                                .note("consider adding parentheses", None),
+                        );
                     }
 
                     let (high, span) = if self.peek_kind()?.is_expr_start() {
                         let high = self.expr(BindingPower::Range, allow_struct)?;
                         if high.is_range() {
-                            return Err(Error::Parse(
-                                "range bounds cannot be ranges".to_string(),
-                                high.span(),
-                                vec![Note::new("consider adding parentheses".to_string(), None)],
-                            ));
+                            return Err(Error::new(
+                                "range bounds cannot be ranges",
+                                Some(high.span()),
+                            )
+                            .note("consider adding parentheses", None));
                         }
                         let span = lhs.span().to(high.span());
                         (Some(Box::new(high)), span)
@@ -1408,14 +1398,13 @@ impl<'a> Parser<'a> {
             self.expect(LBrack)?;
             RBrack
         } else {
-            return Err(Error::Parse(
+            return Err(Error::new(
                 format!(
                     "expected {} or {} after macro name",
                     LParen.desc(),
                     LBrack.desc()
                 ),
-                self.peek_span()?,
-                vec![],
+                Some(self.peek_span()?),
             ));
         };
 
@@ -1755,7 +1744,7 @@ impl<'a> Parser<'a> {
                     id: HirId::new(),
                 })
             }
-            kind => Err(Error::Parse(
+            kind => Err(Error::new(
                 format!(
                     "expected {}, {}, {} or {}, found {}",
                     Pub.desc(),
@@ -1764,8 +1753,7 @@ impl<'a> Parser<'a> {
                     Static.desc(),
                     kind.desc()
                 ),
-                self.peek_span()?,
-                vec![],
+                Some(self.peek_span()?),
             )),
         }
     }
@@ -1831,10 +1819,9 @@ impl<'a> Parser<'a> {
             self.expect(Comma)?;
         }
         if self.peek(Comma)? {
-            return Err(Error::Parse(
+            return Err(Error::new(
                 format!("expected parameter, found {}", Comma.desc()),
-                self.peek_span()?,
-                vec![],
+                Some(self.peek_span()?),
             ));
         }
 
@@ -1857,10 +1844,9 @@ impl<'a> Parser<'a> {
             let name = match pattern.into_name() {
                 Ok(name) => name,
                 Err(span) => {
-                    return Err(Error::Parse(
-                        "variadic arguments cannot be deconstructed".to_string(),
-                        span,
-                        vec![],
+                    return Err(Error::new(
+                        "variadic arguments cannot be deconstructed",
+                        Some(span),
                     ))
                 }
             };
@@ -1891,10 +1877,9 @@ impl<'a> Parser<'a> {
                 let name = match pattern.into_name() {
                     Ok(name) => name,
                     Err(span) => {
-                        return Err(Error::Parse(
-                            "variadic arguments cannot be deconstructed".to_string(),
-                            span,
-                            vec![],
+                        return Err(Error::new(
+                            "variadic arguments cannot be deconstructed",
+                            Some(span),
                         ))
                     }
                 };
@@ -1953,10 +1938,9 @@ impl<'a> Parser<'a> {
             let span = first.span.to(last.span);
             Ok(Pattern::Array { array, span })
         } else {
-            Err(Error::Parse(
+            Err(Error::new(
                 format!("expected pattern, found {}", self.peek_kind()?.desc()),
-                self.peek_span()?,
-                vec![],
+                Some(self.peek_span()?),
             ))
         }
     }
@@ -2046,10 +2030,9 @@ impl<'a> Parser<'a> {
         if !self.consume(Comma)? && !allow_singleton && tuple.len() == 1 {
             let last_span = self.peek_span()?;
             let span = first.span.to(last_span);
-            return Err(Error::Parse(
-                "parenthesized patterns are not allowed".to_string(),
-                span,
-                vec![],
+            return Err(Error::new(
+                "parenthesized patterns are not allowed",
+                Some(span),
             ));
         }
         let last = self.expect(RParen)?;
@@ -2287,10 +2270,9 @@ impl<'a> Parser<'a> {
 
     fn disallow_pub(&mut self, pub_span: Option<Span>, kind: TokenKind) -> Result<(), Error> {
         if let Some(span) = pub_span {
-            Err(Error::Parse(
+            Err(Error::new(
                 format!("{} not permitted before {}", Pub.desc(), kind.desc()),
-                span,
-                vec![],
+                Some(span),
             ))
         } else {
             Ok(())

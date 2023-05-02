@@ -5,14 +5,29 @@ use crate::span::Span;
 use crate::{color, reset};
 
 #[derive(Debug)]
-pub enum Error {
-    Lex(String, Span, Vec<Note>),
-    Parse(String, Span, Vec<Note>),
-    Io(String, Option<Span>, Vec<Note>),
-    Name(String, Span, Vec<Note>),
+pub struct Error {
+    msg: String,
+    span: Option<Span>,
+    notes: Vec<Note>,
 }
 
 impl Error {
+    pub fn new(msg: impl Into<String>, span: Option<Span>) -> Self {
+        Error {
+            msg: msg.into(),
+            span: span,
+            notes: Vec::new(),
+        }
+    }
+
+    pub fn note(mut self, msg: impl Into<String>, span: Option<Span>) -> Self {
+        self.notes.push(Note {
+            msg: msg.into(),
+            span,
+        });
+        self
+    }
+
     pub fn print(&self, map: &FileMap) {
         self.write(&mut io::stdout(), true, map).unwrap();
     }
@@ -23,79 +38,25 @@ impl Error {
     }
 
     pub fn write<W: Write>(&self, out: &mut W, color: bool, map: &FileMap) -> io::Result<()> {
-        match self {
-            Error::Lex(msg, span, notes) => {
-                writeln!(
-                    out,
-                    "{}lex error:{} {}",
-                    color!(Red, color),
-                    reset!(color),
-                    msg
-                )?;
+        write!(
+            out,
+            "{}error:{} {}",
+            color!(Red, color),
+            reset!(color),
+            self.msg
+        )?;
 
-                span.write(out, color, map)?;
-
-                for note in notes {
-                    writeln!(out)?;
-                    note.write(out, color, map)?;
-                }
-                Ok(())
-            }
-            Error::Parse(msg, span, notes) => {
-                writeln!(
-                    out,
-                    "{}parse error:{} {}",
-                    color!(Red, color),
-                    reset!(color),
-                    msg
-                )?;
-
-                span.write(out, color, map)?;
-
-                for note in notes {
-                    writeln!(out)?;
-                    note.write(out, color, map)?;
-                }
-                Ok(())
-            }
-            Error::Io(msg, span, notes) => {
-                write!(
-                    out,
-                    "{}io error:{} {}",
-                    color!(Red, color),
-                    reset!(color),
-                    msg
-                )?;
-
-                if let Some(span) = span {
-                    writeln!(out)?;
-                    span.write(out, color, map)?;
-                }
-
-                for note in notes {
-                    writeln!(out)?;
-                    note.write(out, color, map)?;
-                }
-                Ok(())
-            }
-            Error::Name(msg, span, notes) => {
-                writeln!(
-                    out,
-                    "{}name error:{} {}",
-                    color!(Red, color),
-                    reset!(color),
-                    msg
-                )?;
-
-                span.write(out, color, map)?;
-
-                for note in notes {
-                    writeln!(out)?;
-                    note.write(out, color, map)?;
-                }
-                Ok(())
-            }
+        if let Some(span) = self.span {
+            writeln!(out)?;
+            span.write(out, color, map)?;
         }
+
+        for note in &self.notes {
+            writeln!(out)?;
+            note.write(out, color, map)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -106,10 +67,6 @@ pub struct Note {
 }
 
 impl Note {
-    pub fn new(msg: String, span: Option<Span>) -> Self {
-        Note { msg, span }
-    }
-
     fn write<W: Write>(&self, out: &mut W, color: bool, map: &FileMap) -> io::Result<()> {
         write!(
             out,

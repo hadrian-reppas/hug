@@ -55,14 +55,13 @@ impl Span {
         if both.len() == self.len() + other.len() {
             Ok(both)
         } else {
-            Err(Error::Parse(
+            Err(Error::new(
                 format!(
                     "there should be no space between `{}` and `{}`",
                     &code[self.start..self.end],
                     &code[other.start..other.end]
                 ),
-                both,
-                vec![],
+                Some(both),
             ))
         }
     }
