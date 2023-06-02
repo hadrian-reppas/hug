@@ -607,10 +607,7 @@ impl<'a> Parser<'a> {
         if self.peek(Semi)? {
             let last = self.expect(Semi)?;
             let span = signature.span.to(last.span);
-            Ok(TraitItem::Required {
-                signature,
-                span,
-            })
+            Ok(TraitItem::Required { signature, span })
         } else if self.peek(LBrace)? {
             let block = self.block()?;
             let span = signature.span.to(block.span);

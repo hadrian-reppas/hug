@@ -26,13 +26,13 @@ fn main() -> ExitCode {
 
 fn compile(map: &mut io::FileMap) -> Result<(), error::Error> {
     let mut args = env::args();
-    let main_path: PathBuf = if args.len() == 2 {
+    let path: PathBuf = if args.len() == 2 {
         args.next_back().unwrap().into()
     } else {
         return Err(Error::new("invalid arguments", None).note("usage is `hug <filepath>`", None));
     };
 
-    let tree = map.parse_all(main_path)?;
+    let tree = map.parse_all(path, "crate".to_string())?;
     println!("crate: {tree:#?}");
 
     let std = map.parse_std()?;

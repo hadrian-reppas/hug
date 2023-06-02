@@ -39,11 +39,15 @@ impl FileMap {
         FileMap(Vec::new())
     }
 
-    fn load(&mut self, path: PathBuf) -> Result<FileId, Error> {
+    fn load(&mut self, path: PathBuf, crate_name: String) -> Result<FileId, Error> {
         let code = fs::read_to_string(&path)
             .map_err(|_| Error::new(format!("couldn't read file {path:?}"), None))?;
         let id = FileId(self.0.len());
-        self.0.push(FileInfo { code, path });
+        self.0.push(FileInfo {
+            code,
+            path,
+            crate_name,
+        });
         Ok(id)
     }
 
@@ -60,8 +64,8 @@ impl FileMap {
         &code[span.start..span.end]
     }
 
-    fn parse(&mut self, path: PathBuf) -> Result<Vec<UnloadedItem>, Error> {
-        let id = self.load(path)?;
+    fn parse(&mut self, path: PathBuf, crate_name: String) -> Result<Vec<UnloadedItem>, Error> {
+        let id = self.load(path, crate_name)?;
         let code = self.get_code(id);
         parse::parse(code, id)
     }
@@ -82,6 +86,7 @@ impl FileMap {
         self.0.push(FileInfo {
             code,
             path: path_buf,
+            crate_name: "std".to_string(),
         });
         Ok((id, is_mod))
     }
@@ -92,11 +97,11 @@ impl FileMap {
         Ok((parse::parse(code, id)?, is_mod))
     }
 
-    pub fn parse_all(&mut self, path: PathBuf) -> Result<Vec<Item>, Error> {
+    pub fn parse_all(&mut self, path: PathBuf, crate_name: String) -> Result<Vec<Item>, Error> {
         let mut prefix = path.clone();
         prefix.pop();
-        let items = self.parse(path)?;
-        self.collect(items, prefix)
+        let items = self.parse(path, crate_name.clone())?;
+        self.collect(items, prefix, crate_name)
     }
 
     pub fn parse_std(&mut self) -> Result<Vec<Item>, Error> {
@@ -116,13 +121,14 @@ impl FileMap {
         &mut self,
         unloaded_items: Vec<UnloadedItem>,
         prefix: PathBuf,
+        crate_name: String,
     ) -> Result<Vec<Item>, Error> {
         let mut items = Vec::new();
         for item in unloaded_items {
             match Item::try_from(item) {
                 Ok(item) => items.push(item),
                 Err((is_pub, name, span)) => {
-                    items.push(self.handle_mod(is_pub, name, span, &prefix)?)
+                    items.push(self.handle_mod(is_pub, name, span, &prefix, crate_name.clone())?)
                 }
             }
         }
@@ -135,6 +141,7 @@ impl FileMap {
         name: Name,
         span: Span,
         prefix: &Path,
+        crate_name: String,
     ) -> Result<Item, Error> {
         if name.name == "std" {
             return Err(Error::new("module name `std` is reserved", Some(name.span)));
@@ -157,7 +164,7 @@ impl FileMap {
             ))
         } else if file_path.is_file() {
             let mut file_items = Vec::new();
-            for item in self.parse(file_path)? {
+            for item in self.parse(file_path, crate_name)? {
                 match Item::try_from(item) {
                     Ok(item) => file_items.push(item),
                     Err((_, _, span)) => {
@@ -175,9 +182,9 @@ impl FileMap {
                 span,
             })
         } else if mod_path.is_file() {
-            let unloaded_items = self.parse(mod_path.clone())?;
+            let unloaded_items = self.parse(mod_path.clone(), crate_name.clone())?;
             mod_path.pop();
-            let mod_items = self.collect(unloaded_items, mod_path)?;
+            let mod_items = self.collect(unloaded_items, mod_path, crate_name)?;
             Ok(Item::Mod {
                 is_pub,
                 name,
@@ -239,6 +246,7 @@ impl FileMap {
 struct FileInfo {
     code: String,
     path: PathBuf,
+    crate_name: String,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
