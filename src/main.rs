@@ -1,10 +1,10 @@
 mod ast;
-mod ast_lowering;
 mod error;
 mod hir;
 mod io;
 mod lex;
 mod parse;
+mod resolve;
 mod span;
 
 use std::collections::HashMap;
@@ -25,21 +25,21 @@ fn main() -> ExitCode {
 }
 
 fn compile(map: &mut io::FileMap) -> Result<(), error::Error> {
-    let mut args: Vec<_> = env::args().collect();
+    let mut args = env::args();
     let main_path: PathBuf = if args.len() == 2 {
-        args.pop().unwrap().into()
+        args.next_back().unwrap().into()
     } else {
         return Err(Error::new("invalid arguments", None).note("usage is `hug <filepath>`", None));
     };
 
     let tree = map.parse_all(main_path)?;
-    // println!("self: {tree:#?}");
+    println!("crate: {tree:#?}");
 
     let std = map.parse_std()?;
     // println!("std: {std:#?}");
 
     let other_trees = HashMap::from([("std".to_string(), std)]);
-    let lowered = ast_lowering::lower(tree, other_trees)?;
+    let lowered = resolve::resolve(tree, other_trees)?;
     println!("lowered: {lowered:#?}");
 
     todo!()

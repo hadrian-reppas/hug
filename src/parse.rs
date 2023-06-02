@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use crate::ast::*;
 use crate::error::{Error, Note};
-use crate::hir::HirId;
+use crate::hir::{HirId, IdCell};
 use crate::io::FileId;
 use crate::lex::{Token, TokenKind, TokenKind::*, Tokens};
 use crate::span::Span;
@@ -136,10 +136,16 @@ impl<'a> Parser<'a> {
             }
             Star => {
                 let star_span = self.expect(Star)?.span;
+                let mut_span = if self.peek(Mut)? {
+                    Some(self.expect(Mut)?.span)
+                } else {
+                    None
+                };
                 let ty = self.ty()?;
 
                 let span = star_span.to(ty.span());
                 Ok(Ty::Ptr {
+                    mut_span,
                     ty: Box::new(ty),
                     span,
                 })
@@ -489,7 +495,6 @@ impl<'a> Parser<'a> {
                 name,
                 tuple: None,
                 span,
-                id: HirId::new(),
             });
         }
 
@@ -500,7 +505,6 @@ impl<'a> Parser<'a> {
                 name,
                 tuple: Some(Vec::new()),
                 span,
-                id: HirId::new(),
             });
         }
 
@@ -517,7 +521,6 @@ impl<'a> Parser<'a> {
             name,
             tuple: Some(tuple),
             span,
-            id: HirId::new(),
         })
     }
 
@@ -607,7 +610,6 @@ impl<'a> Parser<'a> {
             Ok(TraitItem::Required {
                 signature,
                 span,
-                id: HirId::new(),
             })
         } else if self.peek(LBrace)? {
             let block = self.block()?;
@@ -616,7 +618,6 @@ impl<'a> Parser<'a> {
                 signature,
                 block,
                 span,
-                id: HirId::new(),
             })
         } else {
             Err(Error::new(
@@ -1682,7 +1683,6 @@ impl<'a> Parser<'a> {
                     is_pub,
                     signature,
                     span,
-                    id: HirId::new(),
                 })
             }
             Type => {
@@ -1719,7 +1719,6 @@ impl<'a> Parser<'a> {
                     name,
                     info,
                     span,
-                    id: HirId::new(),
                 })
             }
             Static => {
@@ -1741,7 +1740,6 @@ impl<'a> Parser<'a> {
                     name,
                     ty,
                     span,
-                    id: HirId::new(),
                 })
             }
             kind => Err(Error::new(
@@ -1770,8 +1768,13 @@ impl<'a> Parser<'a> {
         self.expect(LParen)?;
         let self_kind = if self.peek(Star)? {
             let first = self.expect(Star)?;
-            let last = self.expect(SelfValue)?;
-            SelfKind::Ptr(first.span.to(last.span))
+            if self.consume(Mut)? {
+                let last = self.expect(SelfValue)?;
+                SelfKind::MutPtr(first.span.to(last.span))
+            } else {
+                let last = self.expect(SelfValue)?;
+                SelfKind::Ptr(first.span.to(last.span))
+            }
         } else if self.peek(SelfValue)? {
             SelfKind::Value(self.expect(SelfValue)?.span)
         } else {
@@ -2210,7 +2213,6 @@ impl<'a> Parser<'a> {
             signature,
             block,
             span,
-            id: HirId::new(),
         })
     }
 
@@ -2283,7 +2285,11 @@ impl<'a> Parser<'a> {
         let token = self.expect(Ident)?;
         let span = token.span;
         let name = self.tokens.code()[span.start..span.end].to_string();
-        Ok(Name { name, span })
+        Ok(Name {
+            name,
+            span,
+            id: HirId::new(),
+        })
     }
 
     fn path(&mut self) -> Result<Path, Error> {

@@ -1,69 +1,65 @@
 use std::collections::HashMap;
 
+use crate::ast;
 use crate::error::{Error, Note};
+use crate::hir::HirId;
 use crate::span::Span;
-use crate::{ast, hir};
 
-#[derive(Debug)]
 enum NameNode {
     Mod {
         is_pub: bool,
-        items: HashMap<String, NameNode>,
+        items: HashMap<String, HirId>,
     },
     Fn {
         is_pub: bool,
-        id: hir::FnId,
+        id: HirId,
     },
     ExternFn {
         is_pub: bool,
-        id: hir::ExternFnId,
+        id: HirId,
     },
     ExternType {
         is_pub: bool,
-        id: hir::ExternTypeId,
-        impl_fns: HashMap<String, ImplFnInfo<hir::ExternImplFnId>>,
+        id: HirId,
+        impl_fns: HashMap<String, ImplFnInfo>,
     },
     ExternStatic {
         is_pub: bool,
-        id: hir::ExternStaticId,
+        id: HirId,
     },
     Struct {
         is_pub: bool,
-        id: hir::StructId,
-        impl_fns: HashMap<String, ImplFnInfo<hir::StructImplFnId>>,
+        id: HirId,
+        impl_fns: HashMap<String, ImplFnInfo>,
     },
     Enum {
         is_pub: bool,
-        id: hir::EnumId,
-        variants: HashMap<String, hir::EnumVariantId>,
-        impl_fns: HashMap<String, ImplFnInfo<hir::EnumImplFnId>>,
+        id: HirId,
+        variants: HashMap<String, HirId>,
+        impl_fns: HashMap<String, ImplFnInfo>,
     },
     Trait {
         is_pub: bool,
-        id: hir::TraitId,
-        trait_fns: HashMap<String, hir::TraitFnId>,
+        id: HirId,
+        trait_fns: HashMap<String, HirId>,
     },
     Const {
         is_pub: bool,
-        id: hir::ConstId,
+        id: HirId,
     },
     Static {
         is_pub: bool,
-        id: hir::StaticId,
+        id: HirId,
     },
 }
 
 impl NameNode {
-    fn insert_impl_fn_id(&mut self, name: String, is_pub: bool, id: usize) {
+    fn insert_impl_fn_id(&mut self, name: String, is_pub: bool, id: HirId) {
         match self {
-            NameNode::ExternType { impl_fns, .. } => {
-                impl_fns.insert(name, ImplFnInfo::new(is_pub, id));
-            }
-            NameNode::Struct { impl_fns, .. } => {
-                impl_fns.insert(name, ImplFnInfo::new(is_pub, id));
-            }
-            NameNode::Enum { impl_fns, .. } => {
-                impl_fns.insert(name, ImplFnInfo::new(is_pub, id));
+            NameNode::ExternType { impl_fns, .. }
+            | NameNode::Struct { impl_fns, .. }
+            | NameNode::Enum { impl_fns, .. } => {
+                impl_fns.insert(name, ImplFnInfo { is_pub, id });
             }
             _ => unreachable!(),
         }
@@ -71,20 +67,12 @@ impl NameNode {
 }
 
 #[derive(Debug)]
-struct ImplFnInfo<T> {
+struct ImplFnInfo {
     is_pub: bool,
-    id: T,
+    id: HirId,
 }
 
-impl<T: From<usize>> ImplFnInfo<T> {
-    fn new(is_pub: bool, id: usize) -> Self {
-        ImplFnInfo {
-            is_pub,
-            id: id.into(),
-        }
-    }
-}
-
+/*
 struct ImplTypeInfo<'a> {
     type_is_pub: bool,
     fn_spans: HashMap<&'a String, Span>,
@@ -472,17 +460,16 @@ fn resolve(
 
     Ok(hir_items)
 }
+*/
 
 #[derive(Debug)]
-pub struct Lowered {
-    items: Vec<hir::Item>,
-    info: (),
-}
+pub struct Lowered;
 
-pub fn lower(
+pub fn resolve(
     items: Vec<ast::Item>,
     other_items: HashMap<String, Vec<ast::Item>>,
 ) -> Result<Lowered, Error> {
+    /*
     let mut map = HashMap::new();
 
     map.insert(
@@ -517,6 +504,6 @@ pub fn lower(
     }
 
     println!("lowered_items: {lowered_items:#?}");
-
+    */
     todo!()
 }

@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::ast::{Item, Name, UnloadedItem};
 use crate::error::{Error, Note};
+use crate::hir::HirId;
 use crate::parse;
 use crate::span::Span;
 

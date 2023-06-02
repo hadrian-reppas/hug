@@ -1,11 +1,12 @@
 use std::fmt::{self, Debug};
 
-use crate::hir::{self, HirId};
+use crate::hir::{HirId, IdCell};
 use crate::span::Span;
 
 pub struct Name {
     pub name: String,
     pub span: Span,
+    pub id: HirId,
 }
 
 impl Debug for Name {
@@ -35,6 +36,7 @@ pub enum Ty {
         span: Span,
     },
     Ptr {
+        mut_span: Option<Span>,
         ty: Box<Ty>,
         span: Span,
     },
@@ -185,7 +187,6 @@ pub enum Item {
         generic_params: Option<GenericParams>,
         fields: Vec<StructField>,
         span: Span,
-        id: HirId<hir::StructId>,
     },
     Enum {
         is_pub: bool,
@@ -193,7 +194,6 @@ pub enum Item {
         generic_params: Option<GenericParams>,
         items: Vec<EnumItem>,
         span: Span,
-        id: HirId<hir::EnumId>,
     },
     Mod {
         is_pub: bool,
@@ -214,14 +214,12 @@ pub enum Item {
         where_clause: Option<WhereClause>,
         items: Vec<TraitItem>,
         span: Span,
-        id: HirId<hir::TraitId>,
     },
     Fn {
         is_pub: bool,
         signature: Signature,
         block: Block,
         span: Span,
-        id: HirId<hir::FnId>,
     },
     Impl {
         name: Name,
@@ -237,7 +235,6 @@ pub enum Item {
         ty: Ty,
         expr: Expr,
         span: Span,
-        id: HirId<hir::ConstId>,
     },
     Static {
         is_pub: bool,
@@ -245,7 +242,6 @@ pub enum Item {
         ty: Ty,
         expr: Option<Expr>,
         span: Span,
-        id: HirId<hir::StaticId>,
     },
 }
 
@@ -291,7 +287,6 @@ impl TryFrom<UnloadedItem> for Item {
                 generic_params,
                 fields,
                 span,
-                id: HirId::new(),
             }),
             UnloadedItem::Enum {
                 is_pub,
@@ -305,7 +300,6 @@ impl TryFrom<UnloadedItem> for Item {
                 generic_params,
                 items,
                 span,
-                id: HirId::new(),
             }),
             UnloadedItem::Mod { is_pub, name, span } => Err((is_pub, name, span)),
             UnloadedItem::Extern { items, span } => Ok(Item::Extern { items, span }),
@@ -327,7 +321,6 @@ impl TryFrom<UnloadedItem> for Item {
                 where_clause,
                 items,
                 span,
-                id: HirId::new(),
             }),
             UnloadedItem::Fn {
                 is_pub,
@@ -339,7 +332,6 @@ impl TryFrom<UnloadedItem> for Item {
                 signature,
                 block,
                 span,
-                id: HirId::new(),
             }),
             UnloadedItem::Impl {
                 name,
@@ -368,7 +360,6 @@ impl TryFrom<UnloadedItem> for Item {
                 ty,
                 expr,
                 span,
-                id: HirId::new(),
             }),
             UnloadedItem::Static {
                 is_pub,
@@ -382,7 +373,6 @@ impl TryFrom<UnloadedItem> for Item {
                 ty,
                 expr,
                 span,
-                id: HirId::new(),
             }),
         }
     }
@@ -415,7 +405,6 @@ pub struct EnumItem {
     pub name: Name,
     pub tuple: Option<Vec<Ty>>,
     pub span: Span,
-    pub id: HirId<hir::EnumVariantId>,
 }
 
 #[derive(Debug)]
@@ -424,21 +413,18 @@ pub enum ExternItem {
         is_pub: bool,
         signature: Signature,
         span: Span,
-        id: HirId<hir::ExternFnId>,
     },
     Type {
         is_pub: bool,
         name: Name,
         info: Option<ExternTypeInfo>,
         span: Span,
-        id: HirId<hir::ExternTypeId>,
     },
     Static {
         is_pub: bool,
         name: Name,
         ty: Ty,
         span: Span,
-        id: HirId<hir::ExternStaticId>,
     },
 }
 
@@ -481,6 +467,7 @@ pub struct GenericParams {
 #[derive(Debug)]
 pub enum SelfKind {
     Ptr(Span),
+    MutPtr(Span),
     Value(Span),
     None,
 }
@@ -488,7 +475,7 @@ pub enum SelfKind {
 impl SelfKind {
     pub fn span(&self) -> Option<Span> {
         match self {
-            SelfKind::Ptr(span) | SelfKind::Value(span) => Some(*span),
+            SelfKind::Ptr(span) | SelfKind::MutPtr(span) | SelfKind::Value(span) => Some(*span),
             SelfKind::None => None,
         }
     }
@@ -552,13 +539,11 @@ pub enum TraitItem {
     Required {
         signature: Signature,
         span: Span,
-        id: HirId<hir::TraitFnId>,
     },
     Provided {
         signature: Signature,
         block: Block,
         span: Span,
-        id: HirId<hir::TraitFnId>,
     },
 }
 
@@ -608,13 +593,6 @@ pub enum Stmt {
         items: Vec<EnumItem>,
         span: Span,
     },
-    Type {
-        is_pub: bool,
-        name: Name,
-        generic_params: Option<GenericParams>,
-        ty: Ty,
-        span: Span,
-    },
     Extern {
         items: Vec<ExternItem>,
         span: Span,
@@ -649,7 +627,6 @@ impl Stmt {
             | Stmt::Use { span, .. }
             | Stmt::Struct { span, .. }
             | Stmt::Enum { span, .. }
-            | Stmt::Type { span, .. }
             | Stmt::Extern { span, .. }
             | Stmt::Fn { span, .. }
             | Stmt::Const { span, .. }
@@ -1194,5 +1171,4 @@ pub struct ImplFn {
     pub signature: Signature,
     pub block: Block,
     pub span: Span,
-    pub id: HirId<hir::ImplFnId>,
 }
