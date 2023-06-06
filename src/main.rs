@@ -33,13 +33,10 @@ fn compile(map: &mut io::FileMap) -> Result<(), error::Error> {
     };
 
     let tree = map.parse_all(path, "crate".to_string())?;
-    println!("crate: {tree:#?}");
-
     let std = map.parse_std()?;
-    // println!("std: {std:#?}");
 
-    let other_trees = HashMap::from([("std".to_string(), std)]);
-    let lowered = resolve::resolve(tree, other_trees)?;
+    let crates = HashMap::from([("crate".to_string(), tree), ("std".to_string(), std)]);
+    let lowered = resolve::resolve(crates)?;
     println!("lowered: {lowered:#?}");
 
     todo!()

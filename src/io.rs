@@ -249,5 +249,5 @@ struct FileInfo {
     crate_name: String,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct FileId(usize);

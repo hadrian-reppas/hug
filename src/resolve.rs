@@ -3,63 +3,78 @@ use std::collections::HashMap;
 use crate::ast;
 use crate::error::{Error, Note};
 use crate::hir::HirId;
+use crate::io::FileId;
 use crate::span::Span;
 
+#[derive(Debug)]
 enum NameNode {
     Mod {
-        is_pub: bool,
-        items: HashMap<String, HirId>,
+        visibility: Visibility,
+        items: HashMap<String, NameNode>,
+        id: HirId,
     },
     Fn {
-        is_pub: bool,
+        visibility: Visibility,
         id: HirId,
     },
     ExternFn {
-        is_pub: bool,
+        visibility: Visibility,
         id: HirId,
     },
     ExternType {
-        is_pub: bool,
+        visibility: Visibility,
         id: HirId,
         impl_fns: HashMap<String, ImplFnInfo>,
     },
     ExternStatic {
-        is_pub: bool,
+        visibility: Visibility,
         id: HirId,
     },
     Struct {
-        is_pub: bool,
+        visibility: Visibility,
         id: HirId,
         impl_fns: HashMap<String, ImplFnInfo>,
     },
     Enum {
-        is_pub: bool,
+        visibility: Visibility,
         id: HirId,
         variants: HashMap<String, HirId>,
         impl_fns: HashMap<String, ImplFnInfo>,
     },
     Trait {
-        is_pub: bool,
+        visibility: Visibility,
         id: HirId,
         trait_fns: HashMap<String, HirId>,
     },
     Const {
-        is_pub: bool,
+        visibility: Visibility,
         id: HirId,
     },
     Static {
-        is_pub: bool,
+        visibility: Visibility,
         id: HirId,
     },
 }
 
+#[derive(Debug)]
+enum Visibility {
+    Pub,
+    File(FileId),
+}
+
+impl Visibility {
+    fn is_pub(&self) -> bool {
+        matches!(self, Visibility::Pub)
+    }
+}
+
 impl NameNode {
-    fn insert_impl_fn_id(&mut self, name: String, is_pub: bool, id: HirId) {
+    fn insert_impl_fn_id(&mut self, name: String, visibility: Visibility, id: HirId) {
         match self {
             NameNode::ExternType { impl_fns, .. }
             | NameNode::Struct { impl_fns, .. }
             | NameNode::Enum { impl_fns, .. } => {
-                impl_fns.insert(name, ImplFnInfo { is_pub, id });
+                impl_fns.insert(name, ImplFnInfo { visibility, id });
             }
             _ => unreachable!(),
         }
@@ -68,37 +83,29 @@ impl NameNode {
 
 #[derive(Debug)]
 struct ImplFnInfo {
-    is_pub: bool,
+    visibility: Visibility,
     id: HirId,
 }
 
-/*
+struct NameTree {
+    crates: HashMap<String, HirId>,
+    ids: HashMap<HirId, NameNode>,
+}
+
 struct ImplTypeInfo<'a> {
-    type_is_pub: bool,
+    type_visibility: Visibility,
     fn_spans: HashMap<&'a String, Span>,
-    constructor: &'static dyn Fn(usize) -> hir::ImplFnId,
 }
 
-fn extern_constructor(id: usize) -> hir::ImplFnId {
-    hir::ImplFnId::Extern(id.into())
+macro_rules! visibility {
+    ($is_pub:expr, $span:expr) => {
+        if $is_pub {
+            Visibility::Pub
+        } else {
+            Visibility::File($span.location.file_id)
+        }
+    };
 }
-
-fn struct_constructor(id: usize) -> hir::ImplFnId {
-    hir::ImplFnId::Struct(id.into())
-}
-
-fn enum_constructor(id: usize) -> hir::ImplFnId {
-    hir::ImplFnId::Enum(id.into())
-}
-
-fn next_id<T: From<usize>>() -> T {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static COUNTER: AtomicUsize = AtomicUsize::new(0);
-    COUNTER.fetch_add(1, Ordering::Relaxed).into()
-}
-
-#[derive(Debug)]
-struct NameTree(HashMap<String, NameNode>);
 
 fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
     let mut map = HashMap::new();
@@ -124,26 +131,22 @@ fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
     for item in items {
         match item {
             ast::Item::Use { .. } => {}
-            ast::Item::Struct {
-                is_pub, name, id, ..
-            } => {
+            ast::Item::Struct { is_pub, name, .. } => {
                 check_redef!(name);
-                let new_id = next_id();
-                id.set(new_id);
                 map.insert(
                     name.name.clone(),
                     NameNode::Struct {
-                        is_pub: *is_pub,
-                        id: new_id,
+                        visibility: visibility!(*is_pub, name.span),
+                        id: name.id,
                         impl_fns: HashMap::new(),
                     },
                 );
+
                 impl_spans.insert(
                     &name.name,
                     ImplTypeInfo {
-                        type_is_pub: *is_pub,
+                        type_visibility: visibility!(*is_pub, name.span),
                         fn_spans: HashMap::new(),
-                        constructor: &struct_constructor,
                     },
                 );
             }
@@ -151,7 +154,6 @@ fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                 is_pub,
                 name,
                 items,
-                id,
                 ..
             } => {
                 check_redef!(name);
@@ -172,19 +174,15 @@ fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                             Some(*span),
                         ));
                     }
-                    let new_id = next_id();
                     variant_spans.insert(&item.name.name, item.name.span);
-                    item.id.set(new_id);
-                    variants.insert(item.name.name.clone(), new_id);
+                    variants.insert(item.name.name.clone(), item.name.id);
                 }
 
-                let new_id = next_id();
-                id.set(new_id);
                 map.insert(
                     name.name.clone(),
                     NameNode::Enum {
-                        is_pub: *is_pub,
-                        id: new_id,
+                        visibility: visibility!(*is_pub, name.span),
+                        id: name.id,
                         variants,
                         impl_fns: HashMap::new(),
                     },
@@ -192,9 +190,8 @@ fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                 impl_spans.insert(
                     &name.name,
                     ImplTypeInfo {
-                        type_is_pub: *is_pub,
+                        type_visibility: visibility!(*is_pub, name.span),
                         fn_spans: HashMap::new(),
-                        constructor: &enum_constructor,
                     },
                 );
             }
@@ -209,8 +206,9 @@ fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                 map.insert(
                     name.name.clone(),
                     NameNode::Mod {
-                        is_pub: *is_pub,
+                        visibility: visibility!(*is_pub, name.span),
                         items,
+                        id: name.id,
                     },
                 );
             }
@@ -218,56 +216,42 @@ fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                 for item in items {
                     match item {
                         ast::ExternItem::Fn {
-                            is_pub,
-                            signature,
-                            id,
-                            ..
+                            is_pub, signature, ..
                         } => {
                             check_redef!(signature.name);
-                            let new_id = next_id();
-                            id.set(new_id);
                             map.insert(
                                 signature.name.name.clone(),
                                 NameNode::ExternFn {
-                                    is_pub: *is_pub,
-                                    id: new_id,
+                                    visibility: visibility!(*is_pub, signature.name.span),
+                                    id: signature.name.id,
                                 },
                             );
                         }
-                        ast::ExternItem::Type {
-                            is_pub, name, id, ..
-                        } => {
+                        ast::ExternItem::Type { is_pub, name, .. } => {
                             check_redef!(name);
-                            let new_id = next_id();
-                            id.set(new_id);
                             map.insert(
                                 name.name.clone(),
                                 NameNode::ExternType {
-                                    is_pub: *is_pub,
-                                    id: new_id,
+                                    visibility: visibility!(*is_pub, name.span),
+                                    id: name.id,
                                     impl_fns: HashMap::new(),
                                 },
                             );
                             impl_spans.insert(
                                 &name.name,
                                 ImplTypeInfo {
-                                    type_is_pub: *is_pub,
+                                    type_visibility: visibility!(*is_pub, name.span),
                                     fn_spans: HashMap::new(),
-                                    constructor: &extern_constructor,
                                 },
                             );
                         }
-                        ast::ExternItem::Static {
-                            is_pub, name, id, ..
-                        } => {
+                        ast::ExternItem::Static { is_pub, name, .. } => {
                             check_redef!(name);
-                            let new_id = next_id();
-                            id.set(new_id);
                             map.insert(
                                 name.name.clone(),
                                 NameNode::ExternStatic {
-                                    is_pub: *is_pub,
-                                    id: new_id,
+                                    visibility: visibility!(*is_pub, name.span),
+                                    id: name.id,
                                 },
                             );
                         }
@@ -278,7 +262,6 @@ fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                 is_pub,
                 name,
                 items,
-                id,
                 ..
             } => {
                 check_redef!(name);
@@ -287,8 +270,8 @@ fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                 let mut trait_fns = HashMap::new();
                 for item in items {
                     match item {
-                        ast::TraitItem::Required { signature, id, .. }
-                        | ast::TraitItem::Provided { signature, id, .. } => {
+                        ast::TraitItem::Required { signature, .. }
+                        | ast::TraitItem::Provided { signature, .. } => {
                             if let Some(span) = fn_spans.get(&signature.name.name) {
                                 return Err(Error::new(
                                     format!(
@@ -305,68 +288,51 @@ fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                                     Some(*span),
                                 ));
                             }
-                            let new_id = next_id();
-                            id.set(new_id);
                             fn_spans.insert(&signature.name.name, signature.name.span);
-                            trait_fns.insert(signature.name.name.clone(), new_id);
+                            trait_fns.insert(signature.name.name.clone(), signature.name.id);
                         }
                     }
                 }
 
-                let new_id = next_id();
-                id.set(new_id);
                 map.insert(
                     name.name.clone(),
                     NameNode::Trait {
-                        is_pub: *is_pub,
-                        id: new_id,
+                        visibility: visibility!(*is_pub, name.span),
+                        id: name.id,
                         trait_fns,
                     },
                 );
             }
             ast::Item::Fn {
-                is_pub,
-                signature,
-                id,
-                ..
+                is_pub, signature, ..
             } => {
                 check_redef!(signature.name);
-                let new_id = next_id();
-                id.set(new_id);
                 map.insert(
                     signature.name.name.clone(),
                     NameNode::Fn {
-                        is_pub: *is_pub,
-                        id: new_id,
+                        visibility: visibility!(*is_pub, signature.name.span),
+                        id: signature.name.id,
                     },
                 );
             }
             ast::Item::Impl { .. } => {}
-            ast::Item::Const {
-                is_pub, name, id, ..
-            } => {
+            ast::Item::Const { is_pub, name, .. } => {
                 check_redef!(name);
-                let new_id = next_id();
-                id.set(new_id);
                 map.insert(
                     name.name.clone(),
                     NameNode::Const {
-                        is_pub: *is_pub,
-                        id: new_id,
+                        visibility: visibility!(*is_pub, name.span),
+                        id: name.id,
                     },
                 );
             }
-            ast::Item::Static {
-                is_pub, name, id, ..
-            } => {
+            ast::Item::Static { is_pub, name, .. } => {
                 check_redef!(name);
-                let new_id = next_id();
-                id.set(new_id);
                 map.insert(
                     name.name.clone(),
                     NameNode::Static {
-                        is_pub: *is_pub,
-                        id: new_id,
+                        visibility: visibility!(*is_pub, name.span),
+                        id: name.id,
                     },
                 );
             }
@@ -382,16 +348,12 @@ fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
         } = item
         {
             if let Some(ImplTypeInfo {
-                type_is_pub,
+                type_visibility,
                 fn_spans,
-                constructor,
             }) = impl_spans.get_mut(&name.name)
             {
                 for ast::ImplFn {
-                    is_pub,
-                    signature,
-                    id,
-                    ..
+                    is_pub, signature, ..
                 } in fns
                 {
                     if let Some(span) = fn_spans.get(&signature.name.name) {
@@ -404,7 +366,7 @@ fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                             Some(*span),
                         ));
                     }
-                    if *is_pub && !*type_is_pub {
+                    if *is_pub && !type_visibility.is_pub() {
                         return Err(Error::new(
                             format!(
                                 "function `{}` is declared pub on non-pub type `{}`",
@@ -413,18 +375,16 @@ fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                             Some(signature.name.span),
                         ));
                     }
-                    let new_id = constructor(next_id());
-                    id.set(new_id);
                     fn_spans.insert(&signature.name.name, signature.name.span);
                     map.get_mut(&name.name).unwrap().insert_impl_fn_id(
                         signature.name.name.clone(),
-                        *is_pub,
-                        new_id.into(),
+                        visibility!(*is_pub, signature.name.span),
+                        signature.name.id,
                     );
                 }
             } else {
                 return Err(Error::new(
-                    format!("no type `{}` in this file", name.name),
+                    format!("no type `{}` in this module", name.name),
                     Some(name.span),
                 ));
             }
@@ -434,6 +394,7 @@ fn make_map(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
     Ok(map)
 }
 
+/*
 struct Resolver<'a> {
     global: NameTree,
     stack: Vec<HashMap<&'a str, NameNode>>,
@@ -465,34 +426,24 @@ fn resolve(
 #[derive(Debug)]
 pub struct Lowered;
 
-pub fn resolve(
-    items: Vec<ast::Item>,
-    other_items: HashMap<String, Vec<ast::Item>>,
-) -> Result<Lowered, Error> {
-    /*
+pub fn resolve(crates: HashMap<String, Vec<ast::Item>>) -> Result<Lowered, Error> {
     let mut map = HashMap::new();
 
-    map.insert(
-        "crate".to_string(),
-        NameNode::Mod {
-            is_pub: true,
-            items: make_map(&items[..])?,
-        },
-    );
-
-    for (name, items) in &other_items {
+    for (name, items) in &crates {
         map.insert(
             name.clone(),
             NameNode::Mod {
-                is_pub: true,
+                visibility: Visibility::Pub,
                 items: make_map(&items[..])?,
+                id: HirId::new(),
             },
         );
     }
 
+    println!("crates: {crates:#?}");
     println!("map: {map:#?}");
-    println!("items: {items:#?}");
 
+    /*
     let mut resolver = Resolver {
         global: NameTree(map),
         stack: Vec::new(),
