@@ -748,7 +748,7 @@ impl<'a> Parser<'a> {
             Star => uop!(Star, Deref, Prefix),
             Amp => uop!(Amp, AddrOf, Prefix),
 
-            Ident => self.ident_expr(allow_struct)?,
+            Ident | Crate => self.ident_expr(allow_struct)?,
             SelfValue => Expr::SelfValue {
                 span: self.expect(SelfValue)?.span,
             },
