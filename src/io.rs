@@ -59,6 +59,10 @@ impl FileMap {
         &self.0[id.0].path
     }
 
+    pub fn get_crate_name(&self, id: FileId) -> &String {
+        &self.0[id.0].crate_name
+    }
+
     pub fn text_at(&self, span: Span) -> &str {
         let code = self.get_code(span.location.file_id);
         &code[span.start..span.end]

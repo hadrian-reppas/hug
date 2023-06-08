@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod ast;
 mod error;
 mod hir;
@@ -36,8 +38,7 @@ fn compile(map: &mut io::FileMap) -> Result<(), error::Error> {
     let std = map.parse_std()?;
 
     let crates = HashMap::from([("crate".to_string(), tree), ("std".to_string(), std)]);
-    let lowered = resolve::resolve(crates)?;
-    println!("lowered: {lowered:#?}");
+    let resolved = resolve::resolve(crates, map)?;
 
     todo!()
 }
