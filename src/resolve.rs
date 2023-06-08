@@ -546,7 +546,7 @@ impl<'a> Walker<'a> {
                     fields,
                     ..
                 } => {
-                    self.walk_generics(generic_params)?;
+                    self.walk_generic_params(generic_params)?;
                     for field in fields {
                         self.walk_ty(&field.ty)?;
                     }
@@ -557,7 +557,7 @@ impl<'a> Walker<'a> {
                     items,
                     ..
                 } => {
-                    self.walk_generics(generic_params)?;
+                    self.walk_generic_params(generic_params)?;
                     for item in items {
                         for ty in item.tuple.iter().flatten() {
                             self.walk_ty(ty)?;
@@ -589,7 +589,7 @@ impl<'a> Walker<'a> {
                     items,
                     ..
                 } => {
-                    self.walk_generics(generic_params)?;
+                    self.walk_generic_params(generic_params)?;
                     for bound in self_bounds {
                         self.walk_trait_bound(bound)?;
                     }
@@ -625,7 +625,7 @@ impl<'a> Walker<'a> {
                     fns,
                     ..
                 } => {
-                    self.walk_generics(generic_params)?;
+                    self.walk_generic_params(generic_params)?;
                     if let Some(as_trait) = as_trait {
                         self.walk_trait_bound(as_trait)?;
                     }
@@ -813,7 +813,7 @@ impl<'a> Walker<'a> {
         Ok(())
     }
 
-    fn walk_generics(
+    fn walk_generic_params(
         &mut self,
         generic_params: &'a Option<ast::GenericParams>,
     ) -> Result<(), Error> {
@@ -839,8 +839,81 @@ impl<'a> Walker<'a> {
         Ok(())
     }
 
-    fn walk_ty(&mut self, _ty: &ast::Ty) -> Result<(), Error> {
+    fn walk_ty(&mut self, ty: &ast::Ty) -> Result<(), Error> {
+        match ty {
+            ast::Ty::Path {
+                path, generic_args, ..
+            } => {
+                self.walk_path(path)?;
+                self.walk_generic_args(generic_args)?;
+            }
+            ast::Ty::Ptr { ty, .. } | ast::Ty::Slice { ty, .. } | ast::Ty::Array { ty, .. } => {
+                self.walk_ty(ty)?
+            }
+            ast::Ty::Tuple { tys, .. } => {
+                for ty in tys {
+                    self.walk_ty(ty)?;
+                }
+            }
+            ast::Ty::Fn { params, ret, .. } => {
+                for param in params {
+                    self.walk_ty(param)?;
+                }
+                if let Some(ret) = ret {
+                    self.walk_ty(ret)?;
+                }
+            }
+            ast::Ty::SelfType { .. } | ast::Ty::Never { .. } => {}
+        }
+        Ok(())
+    }
+
+    fn walk_trait_bound(&mut self, bound: &ast::TraitBound) -> Result<(), Error> {
+        match bound {
+            ast::TraitBound::Trait {
+                path, generic_args, ..
+            } => {
+                self.walk_path(path)?;
+                self.walk_generic_args(generic_args)?;
+            }
+            ast::TraitBound::Fn {
+                path, params, ret, ..
+            } => {
+                self.walk_path(path)?;
+                for param in params {
+                    self.walk_ty(param)?;
+                }
+                if let Some(ret) = ret {
+                    self.walk_ty(ret)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn walk_where_clause(&mut self, where_clause: &Option<ast::WhereClause>) -> Result<(), Error> {
+        if let Some(clause) = where_clause {
+            for ast::WhereItem { param, bounds, .. } in &clause.items {
+                self.walk_where_param(param)?;
+                for bound in bounds {
+                    self.walk_trait_bound(bound)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn walk_where_param(&mut self, _param: &ast::Name) -> Result<(), Error> {
         todo!()
+    }
+
+    fn walk_generic_args(&mut self, generic_args: &Option<ast::GenericArgs>) -> Result<(), Error> {
+        if let Some(args) = generic_args {
+            for arg in &args.args {
+                self.walk_ty(arg)?;
+            }
+        }
+        Ok(())
     }
 
     fn walk_signature(&mut self, _signature: &ast::Signature) -> Result<(), Error> {
@@ -851,15 +924,11 @@ impl<'a> Walker<'a> {
         todo!()
     }
 
-    fn walk_trait_bound(&mut self, _bound: &ast::TraitBound) -> Result<(), Error> {
-        todo!()
-    }
-
-    fn walk_where_clause(&mut self, _where_clause: &Option<ast::WhereClause>) -> Result<(), Error> {
-        todo!()
-    }
-
     fn walk_expr(&mut self, _expr: &ast::Expr) -> Result<(), Error> {
+        todo!()
+    }
+
+    fn walk_path(&mut self, _path: &ast::Path) -> Result<(), Error> {
         todo!()
     }
 
