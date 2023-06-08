@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast;
+use crate::ast::*;
 use crate::error::Error;
 use crate::hir::HirId;
 use crate::io::{FileId, FileMap};
@@ -132,7 +132,7 @@ macro_rules! visibility {
     };
 }
 
-fn make_tree(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
+fn make_tree(items: &[Item]) -> Result<HashMap<String, NameNode>, Error> {
     let mut map = HashMap::new();
     let mut prev_spans = HashMap::new();
     let mut impl_spans = HashMap::new();
@@ -155,8 +155,8 @@ fn make_tree(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
 
     for item in items {
         match item {
-            ast::Item::Use { .. } => {}
-            ast::Item::Struct { is_pub, name, .. } => {
+            Item::Use { .. } => {}
+            Item::Struct { is_pub, name, .. } => {
                 check_redef!(name);
                 map.insert(
                     name.name.clone(),
@@ -175,7 +175,7 @@ fn make_tree(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                     },
                 );
             }
-            ast::Item::Enum {
+            Item::Enum {
                 is_pub,
                 name,
                 items,
@@ -220,7 +220,7 @@ fn make_tree(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                     },
                 );
             }
-            ast::Item::Mod {
+            Item::Mod {
                 is_pub,
                 name,
                 items,
@@ -237,10 +237,10 @@ fn make_tree(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                     },
                 );
             }
-            ast::Item::Extern { items, .. } => {
+            Item::Extern { items, .. } => {
                 for item in items {
                     match item {
-                        ast::ExternItem::Fn {
+                        ExternItem::Fn {
                             is_pub, signature, ..
                         } => {
                             check_redef!(signature.name);
@@ -252,7 +252,7 @@ fn make_tree(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                                 },
                             );
                         }
-                        ast::ExternItem::Type { is_pub, name, .. } => {
+                        ExternItem::Type { is_pub, name, .. } => {
                             check_redef!(name);
                             map.insert(
                                 name.name.clone(),
@@ -270,7 +270,7 @@ fn make_tree(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                                 },
                             );
                         }
-                        ast::ExternItem::Static { is_pub, name, .. } => {
+                        ExternItem::Static { is_pub, name, .. } => {
                             check_redef!(name);
                             map.insert(
                                 name.name.clone(),
@@ -283,7 +283,7 @@ fn make_tree(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                     }
                 }
             }
-            ast::Item::Trait {
+            Item::Trait {
                 is_pub,
                 name,
                 items,
@@ -295,8 +295,8 @@ fn make_tree(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                 let mut trait_fns = HashMap::new();
                 for item in items {
                     match item {
-                        ast::TraitItem::Required { signature, .. }
-                        | ast::TraitItem::Provided { signature, .. } => {
+                        TraitItem::Required { signature, .. }
+                        | TraitItem::Provided { signature, .. } => {
                             if let Some(span) = fn_spans.get(&signature.name.name) {
                                 return Err(Error::new(
                                     format!(
@@ -328,7 +328,7 @@ fn make_tree(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                     },
                 );
             }
-            ast::Item::Fn {
+            Item::Fn {
                 is_pub, signature, ..
             } => {
                 check_redef!(signature.name);
@@ -340,8 +340,8 @@ fn make_tree(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                     },
                 );
             }
-            ast::Item::Impl { .. } => {}
-            ast::Item::Const { is_pub, name, .. } => {
+            Item::Impl { .. } => {}
+            Item::Const { is_pub, name, .. } => {
                 check_redef!(name);
                 map.insert(
                     name.name.clone(),
@@ -351,7 +351,7 @@ fn make_tree(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                     },
                 );
             }
-            ast::Item::Static { is_pub, name, .. } => {
+            Item::Static { is_pub, name, .. } => {
                 check_redef!(name);
                 map.insert(
                     name.name.clone(),
@@ -365,7 +365,7 @@ fn make_tree(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
     }
 
     for item in items {
-        if let ast::Item::Impl {
+        if let Item::Impl {
             name,
             as_trait: None,
             fns,
@@ -377,7 +377,7 @@ fn make_tree(items: &[ast::Item]) -> Result<HashMap<String, NameNode>, Error> {
                 fn_spans,
             }) = impl_spans.get_mut(&name.name)
             {
-                for ast::ImplFn {
+                for ImplFn {
                     is_pub, signature, ..
                 } in fns
                 {
@@ -454,7 +454,7 @@ struct Walker<'a> {
 }
 
 impl<'a> Walker<'a> {
-    fn walk(&mut self, items: &'a [ast::Item]) -> Result<(), Error> {
+    fn walk(&mut self, items: &'a [Item]) -> Result<(), Error> {
         let mut frame = HashMap::new();
         let mut prev_spans = HashMap::new();
 
@@ -477,9 +477,9 @@ impl<'a> Walker<'a> {
 
         for item in items {
             match item {
-                ast::Item::Use {
+                Item::Use {
                     crate_span: Some(crate_span),
-                    tree: ast::UseTree { prefix, kind, .. },
+                    tree: UseTree { prefix, kind, .. },
                     ..
                 } => {
                     let crate_name = self.map.get_crate_name(crate_span.location.file_id);
@@ -493,8 +493,8 @@ impl<'a> Walker<'a> {
                         &mut prev_spans,
                     )?;
                 }
-                ast::Item::Use {
-                    tree: ast::UseTree { prefix, kind, .. },
+                Item::Use {
+                    tree: UseTree { prefix, kind, .. },
                     ..
                 } => {
                     let first_span = prefix.path[0].span;
@@ -515,33 +515,32 @@ impl<'a> Walker<'a> {
                         &mut prev_spans,
                     )?;
                 }
-                ast::Item::Struct { name, .. }
-                | ast::Item::Enum { name, .. }
-                | ast::Item::Const { name, .. }
-                | ast::Item::Static { name, .. }
-                | ast::Item::Trait { name, .. }
-                | ast::Item::Mod { name, .. } => handle!(name),
-                ast::Item::Fn { signature, .. } => handle!(signature.name),
-                ast::Item::Extern { items, .. } => {
+                Item::Struct { name, .. }
+                | Item::Enum { name, .. }
+                | Item::Const { name, .. }
+                | Item::Static { name, .. }
+                | Item::Trait { name, .. }
+                | Item::Mod { name, .. } => handle!(name),
+                Item::Fn { signature, .. } => handle!(signature.name),
+                Item::Extern { items, .. } => {
                     for item in items {
                         match item {
-                            ast::ExternItem::Fn { signature, .. } => handle!(signature.name),
-                            ast::ExternItem::Type { name, .. }
-                            | ast::ExternItem::Static { name, .. } => {
+                            ExternItem::Fn { signature, .. } => handle!(signature.name),
+                            ExternItem::Type { name, .. } | ExternItem::Static { name, .. } => {
                                 handle!(name)
                             }
                         }
                     }
                 }
-                ast::Item::Impl { .. } => {}
+                Item::Impl { .. } => {}
             }
         }
         self.stack.push(dbg!(frame));
 
         for item in items {
             match item {
-                ast::Item::Use { .. } => {}
-                ast::Item::Struct {
+                Item::Use { .. } => {}
+                Item::Struct {
                     generic_params,
                     fields,
                     ..
@@ -552,7 +551,7 @@ impl<'a> Walker<'a> {
                     }
                     self.stack.pop();
                 }
-                ast::Item::Enum {
+                Item::Enum {
                     generic_params,
                     items,
                     ..
@@ -565,24 +564,24 @@ impl<'a> Walker<'a> {
                     }
                     self.stack.pop();
                 }
-                ast::Item::Mod { items, .. } => {
+                Item::Mod { items, .. } => {
                     let frame = self.stack.pop().unwrap();
                     self.walk(items)?;
                     self.stack.push(frame);
                 }
-                ast::Item::Extern { items, .. } => {
+                Item::Extern { items, .. } => {
                     for item in items {
                         match item {
-                            ast::ExternItem::Fn { signature, .. } => {
+                            ExternItem::Fn { signature, .. } => {
                                 self.walk_signature(signature)?;
                                 self.stack.pop();
                             }
-                            ast::ExternItem::Type { .. } => {}
-                            ast::ExternItem::Static { ty, .. } => self.walk_ty(ty)?,
+                            ExternItem::Type { .. } => {}
+                            ExternItem::Static { ty, .. } => self.walk_ty(ty)?,
                         }
                     }
                 }
-                ast::Item::Trait {
+                Item::Trait {
                     generic_params,
                     self_bounds,
                     where_clause,
@@ -596,11 +595,11 @@ impl<'a> Walker<'a> {
                     self.walk_where_clause(where_clause)?;
                     for item in items {
                         match item {
-                            ast::TraitItem::Required { signature, .. } => {
+                            TraitItem::Required { signature, .. } => {
                                 self.walk_signature(signature)?;
                                 self.stack.pop();
                             }
-                            ast::TraitItem::Provided {
+                            TraitItem::Provided {
                                 signature, block, ..
                             } => {
                                 self.walk_signature(signature)?;
@@ -611,14 +610,14 @@ impl<'a> Walker<'a> {
                     }
                     self.stack.pop();
                 }
-                ast::Item::Fn {
+                Item::Fn {
                     signature, block, ..
                 } => {
                     self.walk_signature(signature)?;
                     self.walk_block(block)?;
                     self.stack.pop();
                 }
-                ast::Item::Impl {
+                Item::Impl {
                     generic_params,
                     as_trait,
                     where_clause,
@@ -630,7 +629,7 @@ impl<'a> Walker<'a> {
                         self.walk_trait_bound(as_trait)?;
                     }
                     self.walk_where_clause(where_clause)?;
-                    for ast::ImplFn {
+                    for ImplFn {
                         signature, block, ..
                     } in fns
                     {
@@ -640,11 +639,11 @@ impl<'a> Walker<'a> {
                     }
                     self.stack.pop();
                 }
-                ast::Item::Const { ty, expr, .. } => {
+                Item::Const { ty, expr, .. } => {
                     self.walk_ty(ty)?;
                     self.walk_expr(expr)?;
                 }
-                ast::Item::Static { ty, expr, .. } => {
+                Item::Static { ty, expr, .. } => {
                     self.walk_ty(ty)?;
                     if let Some(expr) = expr {
                         self.walk_expr(expr)?;
@@ -662,8 +661,8 @@ impl<'a> Walker<'a> {
         &mut self,
         mut prev_segment_span: Span,
         mut id: HirId,
-        prefix: &'a [ast::Name],
-        kind: &'a ast::UseTreeKind,
+        prefix: &'a [Name],
+        kind: &'a UseTreeKind,
         frame: &mut HashMap<&'a String, HirId>,
         prev_spans: &mut HashMap<&'a String, Span>,
     ) -> Result<(), Error> {
@@ -772,7 +771,7 @@ impl<'a> Walker<'a> {
         }
 
         match kind {
-            ast::UseTreeKind::Simple => {
+            UseTreeKind::Simple => {
                 if !prefix.is_empty() {
                     let last = &prefix[prefix.len() - 1];
                     if let Some(&prev_span) = prev_spans.get(&last.name) {
@@ -789,7 +788,7 @@ impl<'a> Walker<'a> {
                     frame.insert(&last.name, id);
                 }
             }
-            ast::UseTreeKind::Rename(name) => {
+            UseTreeKind::Rename(name) => {
                 if let Some(&prev_span) = prev_spans.get(&name.name) {
                     return Err(Error::new(
                         format!("the name `{}` is defined multiple times", name.name),
@@ -803,8 +802,8 @@ impl<'a> Walker<'a> {
                 prev_spans.insert(&name.name, name.span);
                 frame.insert(&name.name, id);
             }
-            ast::UseTreeKind::Nested(trees) => {
-                for ast::UseTree { prefix, kind, .. } in trees {
+            UseTreeKind::Nested(trees) => {
+                for UseTree { prefix, kind, .. } in trees {
                     self.walk_use(prev_segment_span, id, &prefix.path, kind, frame, prev_spans)?;
                 }
             }
@@ -815,7 +814,7 @@ impl<'a> Walker<'a> {
 
     fn walk_generic_params(
         &mut self,
-        generic_params: &'a Option<ast::GenericParams>,
+        generic_params: &'a Option<GenericParams>,
     ) -> Result<(), Error> {
         let mut frame = HashMap::new();
         if let Some(params) = generic_params {
@@ -839,23 +838,21 @@ impl<'a> Walker<'a> {
         Ok(())
     }
 
-    fn walk_ty(&mut self, ty: &ast::Ty) -> Result<(), Error> {
+    fn walk_ty(&mut self, ty: &Ty) -> Result<(), Error> {
         match ty {
-            ast::Ty::Path {
+            Ty::Path {
                 path, generic_args, ..
             } => {
                 self.walk_path(path)?;
                 self.walk_generic_args(generic_args)?;
             }
-            ast::Ty::Ptr { ty, .. } | ast::Ty::Slice { ty, .. } | ast::Ty::Array { ty, .. } => {
-                self.walk_ty(ty)?
-            }
-            ast::Ty::Tuple { tys, .. } => {
+            Ty::Ptr { ty, .. } | Ty::Slice { ty, .. } | Ty::Array { ty, .. } => self.walk_ty(ty)?,
+            Ty::Tuple { tys, .. } => {
                 for ty in tys {
                     self.walk_ty(ty)?;
                 }
             }
-            ast::Ty::Fn { params, ret, .. } => {
+            Ty::Fn { params, ret, .. } => {
                 for param in params {
                     self.walk_ty(param)?;
                 }
@@ -863,20 +860,20 @@ impl<'a> Walker<'a> {
                     self.walk_ty(ret)?;
                 }
             }
-            ast::Ty::SelfType { .. } | ast::Ty::Never { .. } => {}
+            Ty::SelfType { .. } | Ty::Never { .. } => {}
         }
         Ok(())
     }
 
-    fn walk_trait_bound(&mut self, bound: &ast::TraitBound) -> Result<(), Error> {
+    fn walk_trait_bound(&mut self, bound: &TraitBound) -> Result<(), Error> {
         match bound {
-            ast::TraitBound::Trait {
+            TraitBound::Trait {
                 path, generic_args, ..
             } => {
                 self.walk_path(path)?;
                 self.walk_generic_args(generic_args)?;
             }
-            ast::TraitBound::Fn {
+            TraitBound::Fn {
                 path, params, ret, ..
             } => {
                 self.walk_path(path)?;
@@ -891,9 +888,9 @@ impl<'a> Walker<'a> {
         Ok(())
     }
 
-    fn walk_where_clause(&mut self, where_clause: &Option<ast::WhereClause>) -> Result<(), Error> {
+    fn walk_where_clause(&mut self, where_clause: &Option<WhereClause>) -> Result<(), Error> {
         if let Some(clause) = where_clause {
-            for ast::WhereItem { param, bounds, .. } in &clause.items {
+            for WhereItem { param, bounds, .. } in &clause.items {
                 self.walk_where_param(param)?;
                 for bound in bounds {
                     self.walk_trait_bound(bound)?;
@@ -903,11 +900,11 @@ impl<'a> Walker<'a> {
         Ok(())
     }
 
-    fn walk_where_param(&mut self, _param: &ast::Name) -> Result<(), Error> {
+    fn walk_where_param(&mut self, _param: &Name) -> Result<(), Error> {
         todo!()
     }
 
-    fn walk_generic_args(&mut self, generic_args: &Option<ast::GenericArgs>) -> Result<(), Error> {
+    fn walk_generic_args(&mut self, generic_args: &Option<GenericArgs>) -> Result<(), Error> {
         if let Some(args) = generic_args {
             for arg in &args.args {
                 self.walk_ty(arg)?;
@@ -916,19 +913,19 @@ impl<'a> Walker<'a> {
         Ok(())
     }
 
-    fn walk_signature(&mut self, _signature: &ast::Signature) -> Result<(), Error> {
+    fn walk_signature(&mut self, _signature: &Signature) -> Result<(), Error> {
         todo!()
     }
 
-    fn walk_block(&mut self, _block: &ast::Block) -> Result<(), Error> {
+    fn walk_block(&mut self, _block: &Block) -> Result<(), Error> {
         todo!()
     }
 
-    fn walk_expr(&mut self, _expr: &ast::Expr) -> Result<(), Error> {
+    fn walk_expr(&mut self, _expr: &Expr) -> Result<(), Error> {
         todo!()
     }
 
-    fn walk_path(&mut self, _path: &ast::Path) -> Result<(), Error> {
+    fn walk_path(&mut self, _path: &Path) -> Result<(), Error> {
         todo!()
     }
 
@@ -940,7 +937,7 @@ impl<'a> Walker<'a> {
 #[derive(Debug)]
 pub struct Resolved;
 
-pub fn resolve(crates: HashMap<String, Vec<ast::Item>>, map: &FileMap) -> Result<Resolved, Error> {
+pub fn resolve(crates: HashMap<String, Vec<Item>>, map: &FileMap) -> Result<Resolved, Error> {
     let mut tree = HashMap::new();
 
     for (name, items) in &crates {
