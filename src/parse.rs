@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 
 use crate::ast::*;
-use crate::error::{Error, Note};
-use crate::hir::{HirId, IdCell};
+use crate::error::Error;
+use crate::hir::HirId;
 use crate::io::FileId;
 use crate::lex::{Token, TokenKind, TokenKind::*, Tokens};
 use crate::span::Span;

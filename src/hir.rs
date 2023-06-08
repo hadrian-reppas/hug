@@ -3,9 +3,6 @@ use std::num::NonZeroUsize;
 
 use once_cell::unsync::OnceCell;
 
-use crate::ast::{Name, Path};
-use crate::span::Span;
-
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct HirId(NonZeroUsize);
 

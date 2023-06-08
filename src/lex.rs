@@ -1,7 +1,7 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::error::{Error, Note};
+use crate::error::{Error};
 use crate::io::FileId;
 use crate::span::{Location, Span};
 

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::ast;
-use crate::error::{Error, Note};
+use crate::error::Error;
 use crate::hir::HirId;
 use crate::io::{FileId, FileMap};
 use crate::span::Span;
@@ -643,13 +643,13 @@ impl<'a> Walker<'a> {
                 ast::Item::Const { ty, expr, .. } => {
                     self.walk_ty(ty)?;
                     self.walk_expr(expr)?;
-                },
+                }
                 ast::Item::Static { ty, expr, .. } => {
                     self.walk_ty(ty)?;
                     if let Some(expr) = expr {
                         self.walk_expr(expr)?;
                     }
-                },
+                }
             }
         }
 
@@ -813,7 +813,10 @@ impl<'a> Walker<'a> {
         Ok(())
     }
 
-    fn walk_generics(&mut self, generic_params: &'a Option<ast::GenericParams>) -> Result<(), Error> {
+    fn walk_generics(
+        &mut self,
+        generic_params: &'a Option<ast::GenericParams>,
+    ) -> Result<(), Error> {
         let mut frame = HashMap::new();
         if let Some(params) = generic_params {
             let mut prev_spans = HashMap::new();
@@ -836,27 +839,27 @@ impl<'a> Walker<'a> {
         Ok(())
     }
 
-    fn walk_ty(&mut self, ty: &ast::Ty) -> Result<(), Error> {
+    fn walk_ty(&mut self, _ty: &ast::Ty) -> Result<(), Error> {
         todo!()
     }
 
-    fn walk_signature(&mut self, signature: &ast::Signature) -> Result<(), Error> {
+    fn walk_signature(&mut self, _signature: &ast::Signature) -> Result<(), Error> {
         todo!()
     }
 
-    fn walk_block(&mut self, block: &ast::Block) -> Result<(), Error> {
+    fn walk_block(&mut self, _block: &ast::Block) -> Result<(), Error> {
         todo!()
     }
 
-    fn walk_trait_bound(&mut self, bound: &ast::TraitBound) -> Result<(), Error> {
+    fn walk_trait_bound(&mut self, _bound: &ast::TraitBound) -> Result<(), Error> {
         todo!()
     }
 
-    fn walk_where_clause(&mut self, where_clause: &Option<ast::WhereClause>) -> Result<(), Error> {
+    fn walk_where_clause(&mut self, _where_clause: &Option<ast::WhereClause>) -> Result<(), Error> {
         todo!()
     }
 
-    fn walk_expr(&mut self, expr: &ast::Expr) -> Result<(), Error> {
+    fn walk_expr(&mut self, _expr: &ast::Expr) -> Result<(), Error> {
         todo!()
     }
 
