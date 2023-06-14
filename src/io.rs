@@ -254,3 +254,9 @@ struct FileInfo {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct FileId(usize);
+
+impl FileId {
+    pub const fn first() -> Self {
+        FileId(0)
+    }
+}

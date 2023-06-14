@@ -38,7 +38,7 @@ fn compile(map: &mut io::FileMap) -> Result<(), error::Error> {
     let std = map.parse_std()?;
 
     let crates = HashMap::from([("crate".to_string(), tree), ("std".to_string(), std)]);
-    let _resolved = resolve::resolve(crates, map)?;
+    let _resolved = resolve::resolve(&crates, map)?;
 
     todo!()
 }

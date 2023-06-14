@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use crate::ast::*;
 use crate::error::Error;
-use crate::hir::HirId;
+use crate::hir::{HirId, IdCell};
 use crate::io::FileId;
 use crate::lex::{Token, TokenKind, TokenKind::*, Tokens};
 use crate::span::Span;
@@ -86,12 +86,12 @@ impl<'a> Parser<'a> {
     fn items(&mut self) -> Result<Vec<UnloadedItem>, Error> {
         let mut items = Vec::new();
         while !self.peek(Eof)? {
-            items.push(self.item()?);
+            items.push(self.item(true)?);
         }
         Ok(items)
     }
 
-    fn item(&mut self) -> Result<UnloadedItem, Error> {
+    fn item(&mut self, is_top_level: bool) -> Result<UnloadedItem, Error> {
         let pub_span = if self.peek(Pub)? {
             Some(self.next()?.span)
         } else {
@@ -108,7 +108,7 @@ impl<'a> Parser<'a> {
             Static => self.static_decl(pub_span),
             Use => self.use_decl(pub_span),
             Mod => self.module(pub_span),
-            Extern => self.extern_block(pub_span),
+            Extern => self.extern_block(pub_span, is_top_level),
             kind => Err(Error::new(
                 format!("expected item, found {}", kind.desc()),
                 Some(self.peek_span()?),
@@ -635,7 +635,7 @@ impl<'a> Parser<'a> {
             match self.peek_kind()? {
                 Let => stmts.push(self.local()?),
                 Use | Struct | Enum | Extern | Fn | Const | Static => {
-                    stmts.push(self.item()?.try_into().unwrap())
+                    stmts.push(self.item(false)?.try_into().unwrap())
                 }
                 Semi => {
                     self.expect(Semi)?;
@@ -1645,14 +1645,18 @@ impl<'a> Parser<'a> {
         Ok(Label { name, span })
     }
 
-    fn extern_block(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
+    fn extern_block(
+        &mut self,
+        pub_span: Option<Span>,
+        allow_pub: bool,
+    ) -> Result<UnloadedItem, Error> {
         self.disallow_pub(pub_span, Extern)?;
 
         let first = self.expect(Extern)?;
         self.expect(LBrace)?;
         let mut items = Vec::new();
         while !self.peek(RBrace)? {
-            items.push(self.extern_item()?);
+            items.push(self.extern_item(allow_pub)?);
         }
         let last = self.expect(RBrace)?;
 
@@ -1660,9 +1664,16 @@ impl<'a> Parser<'a> {
         Ok(UnloadedItem::Extern { items, span })
     }
 
-    fn extern_item(&mut self) -> Result<ExternItem, Error> {
+    fn extern_item(&mut self, allow_pub: bool) -> Result<ExternItem, Error> {
         let pub_span = if self.peek(Pub)? {
-            Some(self.next()?.span)
+            if allow_pub {
+                Some(self.next()?.span)
+            } else {
+                return Err(Error::new(
+                    format!("{} not allowed here", Pub.desc()),
+                    Some(self.peek_span()?),
+                ));
+            }
         } else {
             None
         };
@@ -2286,6 +2297,7 @@ impl<'a> Parser<'a> {
             name,
             span,
             id: HirId::new(),
+            res: IdCell::uninit(),
         })
     }
 

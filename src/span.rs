@@ -75,6 +75,18 @@ impl Span {
         self
     }
 
+    pub const fn empty() -> Self {
+        Span {
+            start: 0,
+            end: 0,
+            location: Location {
+                line: 0,
+                column: 0,
+                file_id: FileId::first(),
+            },
+        }
+    }
+
     pub fn print(self, map: &FileMap) {
         self.write(&mut io::stdout(), true, map).unwrap();
     }

@@ -7,11 +7,12 @@ pub struct Name {
     pub name: String,
     pub span: Span,
     pub id: HirId,
+    pub res: IdCell,
 }
 
 impl Debug for Name {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Name({:?})", self.name)
+        write!(f, "Name({:?}, {:?}, {:?})", self.name, self.id, self.res)
     }
 }
 
@@ -580,14 +581,12 @@ pub enum Stmt {
         span: Span,
     },
     Struct {
-        is_pub: bool,
         name: Name,
         generic_params: Option<GenericParams>,
         fields: Vec<StructField>,
         span: Span,
     },
     Enum {
-        is_pub: bool,
         name: Name,
         generic_params: Option<GenericParams>,
         items: Vec<EnumItem>,
@@ -598,20 +597,17 @@ pub enum Stmt {
         span: Span,
     },
     Fn {
-        is_pub: bool,
         signature: Signature,
         block: Block,
         span: Span,
     },
     Const {
-        is_pub: bool,
         name: Name,
         ty: Ty,
         expr: Expr,
         span: Span,
     },
     Static {
-        is_pub: bool,
         name: Name,
         ty: Ty,
         expr: Option<Expr>,
@@ -649,26 +645,24 @@ impl TryFrom<UnloadedItem> for Stmt {
                 span,
             }),
             UnloadedItem::Struct {
-                is_pub,
                 name,
                 generic_params,
                 fields,
                 span,
+                ..
             } => Ok(Stmt::Struct {
-                is_pub,
                 name,
                 generic_params,
                 fields,
                 span,
             }),
             UnloadedItem::Enum {
-                is_pub,
                 name,
                 generic_params,
                 items,
                 span,
+                ..
             } => Ok(Stmt::Enum {
-                is_pub,
                 name,
                 generic_params,
                 items,
@@ -676,37 +670,34 @@ impl TryFrom<UnloadedItem> for Stmt {
             }),
             UnloadedItem::Extern { items, span } => Ok(Stmt::Extern { items, span }),
             UnloadedItem::Fn {
-                is_pub,
                 signature,
                 block,
                 span,
+                ..
             } => Ok(Stmt::Fn {
-                is_pub,
                 signature,
                 block,
                 span,
             }),
             UnloadedItem::Const {
-                is_pub,
                 name,
                 ty,
                 expr,
                 span,
+                ..
             } => Ok(Stmt::Const {
-                is_pub,
                 name,
                 ty,
                 expr,
                 span,
             }),
             UnloadedItem::Static {
-                is_pub,
                 name,
                 ty,
                 expr,
                 span,
+                ..
             } => Ok(Stmt::Static {
-                is_pub,
                 name,
                 ty,
                 expr,
