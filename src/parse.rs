@@ -1388,6 +1388,32 @@ impl<'a> Parser<'a> {
 
     fn macro_expr(&mut self) -> Result<Expr, Error> {
         let name = self.name()?;
+        let kind = match name.name.as_str() {
+            "assert" => MacroKind::Assert,
+            "assert_eq" => MacroKind::AssertEq,
+            "assert_ne" => MacroKind::AssertNe,
+            "column" => MacroKind::Column,
+            "dbg" => MacroKind::Dbg,
+            "eprint" => MacroKind::Eprint,
+            "eprintln" => MacroKind::Eprintln,
+            "file" => MacroKind::File,
+            "format" => MacroKind::Format,
+            "line" => MacroKind::Line,
+            "panic" => MacroKind::Panic,
+            "print" => MacroKind::Print,
+            "println" => MacroKind::Println,
+            "todo" => MacroKind::Todo,
+            "unreachable" => MacroKind::Unreachable,
+            "vec" => MacroKind::Vec,
+            "write" => MacroKind::Write,
+            "writeln" => MacroKind::Writeln,
+            _ => {
+                return Err(Error::new(
+                    format!("the macro `{}` does not exist", name.name),
+                    Some(name.span),
+                ))
+            }
+        };
         self.expect(Bang)?;
         let close = if self.peek(LParen)? {
             self.expect(LParen)?;
@@ -1411,6 +1437,7 @@ impl<'a> Parser<'a> {
             let span = name.span.to(last);
             return Ok(Expr::Macro {
                 name,
+                kind,
                 args: Vec::new(),
                 span,
             });
@@ -1425,7 +1452,12 @@ impl<'a> Parser<'a> {
         let last = self.expect(close)?.span;
 
         let span = name.span.to(last);
-        Ok(Expr::Macro { name, args, span })
+        Ok(Expr::Macro {
+            name,
+            kind,
+            args,
+            span,
+        })
     }
 
     fn generic_path(&mut self) -> Result<GenericPath, Error> {

@@ -729,6 +729,7 @@ pub enum Expr {
     },
     Macro {
         name: Name,
+        kind: MacroKind,
         args: Vec<Expr>,
         span: Span,
     },
@@ -980,6 +981,28 @@ pub struct MatchArm {
     pub pattern: Pattern,
     pub body: Expr,
     pub span: Span,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum MacroKind {
+    Assert,
+    AssertEq,
+    AssertNe,
+    Column,
+    Dbg,
+    Eprint,
+    Eprintln,
+    File,
+    Format,
+    Line,
+    Panic,
+    Print,
+    Println,
+    Todo,
+    Unreachable,
+    Vec,
+    Write,
+    Writeln,
 }
 
 #[derive(Debug)]

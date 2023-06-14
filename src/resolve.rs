@@ -1408,10 +1408,7 @@ impl<'a> Walker<'a> {
             (node.id(), path.path[0].span, &path.path[1..])
         } else {
             return Err(Error::new(
-                format!(
-                    "undeclared module or type `{}`",
-                    path.path[0].name
-                ),
+                format!("undeclared module or type `{}`", path.path[0].name),
                 Some(path.path[0].span),
             ));
         };
@@ -1443,10 +1440,7 @@ impl<'a> Walker<'a> {
             (node.id(), path.segments[0].name.span, &path.segments[1..])
         } else {
             return Err(Error::new(
-                format!(
-                    "undeclared module or type `{}`",
-                    path.segments[0].name.name
-                ),
+                format!("undeclared module or type `{}`", path.segments[0].name.name),
                 Some(path.segments[0].name.span),
             ));
         };
