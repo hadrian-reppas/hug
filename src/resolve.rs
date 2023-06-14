@@ -1041,7 +1041,6 @@ impl<'a> Walker<'a> {
         block: &'a Block,
         pattern: &'a Pattern,
     ) -> Result<(), Error> {
-        // TODO: check `Expr`s for `Label`s
         let mut frame = HashMap::new();
         let mut prev_spans = HashMap::new();
         let mut enum_id_map = HashMap::new();
@@ -1068,7 +1067,14 @@ impl<'a> Walker<'a> {
 
         for stmt in &block.stmts {
             match stmt {
-                Stmt::Local { .. } | Stmt::Expr { .. } => {}
+                Stmt::Local { expr, .. } => {
+                    if let Some(expr) = expr {
+                        self.walk_expr_labels(expr, &mut frame, &mut prev_spans)?;
+                    }
+                }
+                Stmt::Expr { expr, .. } => {
+                    self.walk_expr_labels(expr, &mut frame, &mut prev_spans)?
+                }
                 Stmt::Use {
                     crate_span, tree, ..
                 } => self.walk_full_use(crate_span, tree, &mut frame, &mut prev_spans)?,
@@ -1111,7 +1117,7 @@ impl<'a> Walker<'a> {
                 Stmt::Fn { signature, .. } => handle!(signature.name),
             }
         }
-        self.stack.push(frame);
+        self.stack.push(dbg!(frame));
         self.local_enum_id_map.push(enum_id_map);
 
         self.walk_pattern(pattern, &mut HashMap::new(), false)?;
@@ -1123,6 +1129,191 @@ impl<'a> Walker<'a> {
         self.stack.pop().unwrap();
         self.local_enum_id_map.pop();
         Ok(())
+    }
+
+    fn walk_expr_labels(
+        &mut self,
+        expr: &'a Expr,
+        frame: &mut HashMap<&'a String, HirId>,
+        prev_spans: &mut HashMap<&'a String, Span>,
+    ) -> Result<(), Error> {
+        match expr {
+            Expr::Array { exprs, .. } | Expr::Tuple { exprs, .. } => {
+                for expr in exprs {
+                    self.walk_expr_labels(expr, frame, prev_spans)?;
+                }
+            }
+            Expr::Call { func, args, .. } => {
+                self.walk_expr_labels(func, frame, prev_spans)?;
+                for arg in args {
+                    self.walk_expr_labels(arg, frame, prev_spans)?;
+                }
+            }
+            Expr::MethodCall { receiver, args, .. } => {
+                self.walk_expr_labels(receiver, frame, prev_spans)?;
+                for arg in args {
+                    self.walk_expr_labels(arg, frame, prev_spans)?;
+                }
+            }
+            Expr::Macro { args, .. } => {
+                for arg in args {
+                    self.walk_expr_labels(arg, frame, prev_spans)?;
+                }
+            }
+            Expr::Binary { lhs, rhs, .. } => {
+                self.walk_expr_labels(lhs, frame, prev_spans)?;
+                self.walk_expr_labels(rhs, frame, prev_spans)?;
+            }
+            Expr::Unary { expr, .. } | Expr::Cast { expr, .. } => {
+                self.walk_expr_labels(expr, frame, prev_spans)?
+            }
+            Expr::Literal { .. } | Expr::SelfValue { .. } => {}
+            Expr::If {
+                test,
+                block,
+                else_kind,
+                ..
+            } => {
+                self.walk_expr_labels(test, frame, prev_spans)?;
+                self.walk_block_labels(block, frame, prev_spans)?;
+                self.walk_else_kind_labels(else_kind, frame, prev_spans)?;
+            }
+            Expr::IfLet {
+                expr,
+                block,
+                else_kind,
+                ..
+            } => {
+                self.walk_expr_labels(expr, frame, prev_spans)?;
+                self.walk_block_labels(block, frame, prev_spans)?;
+                self.walk_else_kind_labels(else_kind, frame, prev_spans)?;
+            }
+            Expr::While { test, block, .. } => {
+                self.walk_expr_labels(test, frame, prev_spans)?;
+                self.walk_block_labels(block, frame, prev_spans)?;
+            }
+            Expr::WhileLet { expr, block, .. } => {
+                self.walk_expr_labels(expr, frame, prev_spans)?;
+                self.walk_block_labels(block, frame, prev_spans)?;
+            }
+            Expr::Match { expr, arms, .. } => {
+                self.walk_expr_labels(expr, frame, prev_spans)?;
+                for arm in arms {
+                    self.walk_expr_labels(&arm.body, frame, prev_spans)?;
+                }
+            }
+            Expr::Block { block, .. } | Expr::Loop { block, .. } | Expr::TryBlock { block, .. } => {
+                self.walk_block_labels(block, frame, prev_spans)?
+            }
+            Expr::For { iter, block, .. } => {
+                self.walk_expr_labels(iter, frame, prev_spans)?;
+                self.walk_block_labels(block, frame, prev_spans)?;
+            }
+            Expr::Label { label, .. } => {
+                if let Some(prev_span) = prev_spans.get(&label.name.name) {
+                    return Err(Error::new(
+                        format!("the name `{}` is defined multiple times", label.name.name),
+                        Some(label.name.span),
+                    )
+                    .note(
+                        format!("previous definition of `{}` is here", label.name.name),
+                        Some(*prev_span),
+                    ));
+                } else {
+                    frame.insert(&label.name.name, label.name.id);
+                }
+            }
+            Expr::Goto { expr, .. } => {
+                if let Some(expr) = expr {
+                    self.walk_expr_labels(expr, frame, prev_spans)?;
+                }
+            }
+            Expr::Try { expr, .. }
+            | Expr::Field { expr, .. }
+            | Expr::TupleField { expr, .. }
+            | Expr::Repeat { expr, .. }
+            | Expr::Paren { expr, .. } => self.walk_expr_labels(expr, frame, prev_spans)?,
+            Expr::Assign { target, rhs, .. } | Expr::AssignOp { target, rhs, .. } => {
+                self.walk_expr_labels(target, frame, prev_spans)?;
+                self.walk_expr_labels(rhs, frame, prev_spans)?;
+            }
+            Expr::Index { expr, index, .. } => {
+                self.walk_expr_labels(expr, frame, prev_spans)?;
+                self.walk_expr_labels(index, frame, prev_spans)?;
+            }
+            Expr::Range { low, high, .. } => {
+                if let Some(low) = low {
+                    self.walk_expr_labels(low, frame, prev_spans)?;
+                }
+                if let Some(high) = high {
+                    self.walk_expr_labels(high, frame, prev_spans)?;
+                }
+            }
+            Expr::Path { .. } | Expr::Continue { .. } => {}
+            Expr::Break { expr, .. } | Expr::Return { expr, .. } => {
+                if let Some(expr) = expr {
+                    self.walk_expr_labels(expr, frame, prev_spans)?;
+                }
+            }
+            Expr::Struct { fields, .. } => {
+                for field in fields {
+                    if let ExprField::Expr { expr, .. } = field {
+                        self.walk_expr_labels(expr, frame, prev_spans)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn walk_block_labels(
+        &mut self,
+        block: &'a Block,
+        frame: &mut HashMap<&'a String, HirId>,
+        prev_spans: &mut HashMap<&'a String, Span>,
+    ) -> Result<(), Error> {
+        for stmt in &block.stmts {
+            if let Stmt::Local {
+                expr: Some(expr), ..
+            }
+            | Stmt::Expr { expr, .. } = stmt
+            {
+                self.walk_expr_labels(expr, frame, prev_spans)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn walk_else_kind_labels(
+        &mut self,
+        else_kind: &'a ElseKind,
+        frame: &mut HashMap<&'a String, HirId>,
+        prev_spans: &mut HashMap<&'a String, Span>,
+    ) -> Result<(), Error> {
+        match else_kind {
+            ElseKind::Else { block, .. } => self.walk_block_labels(block, frame, prev_spans),
+            ElseKind::ElseIf {
+                test,
+                block,
+                else_kind,
+                ..
+            } => {
+                self.walk_expr_labels(test, frame, prev_spans)?;
+                self.walk_block_labels(block, frame, prev_spans)?;
+                self.walk_else_kind_labels(else_kind, frame, prev_spans)
+            }
+            ElseKind::ElseIfLet {
+                expr,
+                block,
+                else_kind,
+                ..
+            } => {
+                self.walk_expr_labels(expr, frame, prev_spans)?;
+                self.walk_block_labels(block, frame, prev_spans)?;
+                self.walk_else_kind_labels(else_kind, frame, prev_spans)
+            }
+            ElseKind::Nothing { .. } => Ok(()),
+        }
     }
 
     fn define(&mut self, name: &'a String, id: HirId) {
