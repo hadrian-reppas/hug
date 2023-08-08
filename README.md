@@ -3,8 +3,8 @@
 ## TODO list
 
 - [x] Remove unique keyword
-- [ ] Bring back type aliases
-- [ ] Remove unique traits
+- [x] Bring back type aliases
 - [ ] Add syntax for functional dependencies
+- [ ] Change sytanx for extern fns/types/statics
 - [ ] Nuke name resolution
 - [ ] Reimplement name resolution

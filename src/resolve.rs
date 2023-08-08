@@ -220,6 +220,7 @@ fn make_tree(items: &[Item]) -> Result<HashMap<String, NameNode>, Error> {
                     },
                 );
             }
+            Item::Type { .. } => todo!(),
             Item::Mod {
                 is_pub,
                 name,
@@ -485,6 +486,7 @@ impl<'a> Walker<'a> {
                 } => self.walk_full_use(crate_span, tree, &mut frame, &mut prev_spans)?,
                 Item::Struct { name, .. }
                 | Item::Enum { name, .. }
+                | Item::Type { name, .. }
                 | Item::Const { name, .. }
                 | Item::Static { name, .. }
                 | Item::Trait { name, .. }
@@ -532,6 +534,7 @@ impl<'a> Walker<'a> {
                     }
                     self.stack.pop();
                 }
+                Item:: Type { .. } => todo!(),
                 Item::Mod { items, .. } => {
                     let frame = self.stack.pop().unwrap();
                     self.walk(items)?;
@@ -1104,6 +1107,7 @@ impl<'a> Walker<'a> {
                     }
                     enum_id_map.insert(name.id, variants);
                 }
+                Stmt::Type { .. } => todo!(),
                 Stmt::Extern { items, .. } => {
                     for item in items {
                         match item {
@@ -1362,6 +1366,7 @@ impl<'a> Walker<'a> {
                 }
                 self.stack.pop();
             }
+            Stmt::Type { .. } => todo!(),
             Stmt::Extern { items, .. } => {
                 for item in items {
                     match item {
