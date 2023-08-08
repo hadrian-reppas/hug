@@ -120,7 +120,6 @@ pub enum UnloadedItem {
     },
     Trait {
         is_pub: bool,
-        is_unique: bool,
         name: Name,
         generic_params: Option<GenericParams>,
         self_bounds: Vec<TraitBound>,
@@ -208,7 +207,6 @@ pub enum Item {
     },
     Trait {
         is_pub: bool,
-        is_unique: bool,
         name: Name,
         generic_params: Option<GenericParams>,
         self_bounds: Vec<TraitBound>,
@@ -306,7 +304,6 @@ impl TryFrom<UnloadedItem> for Item {
             UnloadedItem::Extern { items, span } => Ok(Item::Extern { items, span }),
             UnloadedItem::Trait {
                 is_pub,
-                is_unique,
                 name,
                 generic_params,
                 self_bounds,
@@ -315,7 +312,6 @@ impl TryFrom<UnloadedItem> for Item {
                 span,
             } => Ok(Item::Trait {
                 is_pub,
-                is_unique,
                 name,
                 generic_params,
                 self_bounds,

@@ -2,8 +2,8 @@
 
 ## TODO list
 
+- [x] Remove unique keyword
 - [ ] Bring back type aliases
-- [ ] Remove unique keyword
 - [ ] Remove unique traits
 - [ ] Add syntax for functional dependencies
 - [ ] Nuke name resolution
