@@ -296,7 +296,7 @@ impl Debug for Span {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Location {
     pub line: usize,
     pub column: usize,
