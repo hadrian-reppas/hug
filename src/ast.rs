@@ -143,7 +143,7 @@ pub enum UnloadedItem {
         name: Name,
         generic_params: Option<GenericParams>,
         self_bounds: Vec<TraitBound>,
-        where_clause: Option<WhereClause>,
+        where_clause: Option<TraitWhereClause>,
         items: Vec<TraitItem>,
         span: Span,
     },
@@ -253,7 +253,7 @@ pub enum Item {
         name: Name,
         generic_params: Option<GenericParams>,
         self_bounds: Vec<TraitBound>,
-        where_clause: Option<WhereClause>,
+        where_clause: Option<TraitWhereClause>,
         items: Vec<TraitItem>,
         span: Span,
     },
@@ -564,6 +564,34 @@ pub struct WhereItem {
     pub param: Name,
     pub bounds: Vec<TraitBound>,
     pub span: Span,
+}
+
+#[derive(Debug)]
+pub struct TraitWhereClause {
+    pub items: Vec<TraitWhereItem>,
+    pub span: Span,
+}
+
+#[derive(Debug)]
+pub enum TraitWhereItem {
+    Bound {
+        param: Name,
+        bounds: Vec<TraitBound>,
+        span: Span,
+    },
+    Dependency {
+        left: Vec<Name>,
+        right: Name,
+        span: Span,
+    },
+}
+
+impl TraitWhereItem {
+    pub fn span(&self) -> Span {
+        match self {
+            TraitWhereItem::Bound { span, .. } | TraitWhereItem::Dependency { span, .. } => *span,
+        }
+    }
 }
 
 #[derive(Debug)]

@@ -35,6 +35,7 @@ fn compile(map: &mut io::FileMap) -> Result<(), error::Error> {
     };
 
     let tree = map.parse_all(path, "crate".to_string())?;
+    println!("{tree:#?}"); // TODO: remove
     let std = map.parse_std()?;
 
     let crates = HashMap::from([("crate".to_string(), tree), ("std".to_string(), std)]);

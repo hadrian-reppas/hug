@@ -564,8 +564,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let self_bounds = if self.peek(Colon)? {
-            self.expect(Colon)?;
+        let self_bounds = if self.consume(Colon)? {
             let mut bounds = vec![self.trait_bound()?];
             while self.peek(Plus)? {
                 self.consume(Plus)?;
@@ -577,7 +576,7 @@ impl<'a> Parser<'a> {
         };
 
         let where_clause = if self.peek(Where)? {
-            Some(self.where_clause()?)
+            Some(self.trait_where_clause()?)
         } else {
             None
         };
@@ -635,6 +634,80 @@ impl<'a> Parser<'a> {
                 ),
                 Some(self.peek_span()?),
             ))
+        }
+    }
+
+    fn trait_where_clause(&mut self) -> Result<TraitWhereClause, Error> {
+        let first = self.expect(Where)?;
+
+        let mut items = vec![self.trait_where_item()?];
+        while self.peek([Comma, Ident])? || self.peek([Comma, LParen])? {
+            self.expect(Comma)?;
+            items.push(self.trait_where_item()?);
+        }
+
+        let last_span = if self.peek(Comma)? {
+            self.expect(Comma)?.span
+        } else {
+            items.last().unwrap().span()
+        };
+
+        let span = first.span.to(last_span);
+        Ok(TraitWhereClause { items, span })
+    }
+
+    fn trait_where_item(&mut self) -> Result<TraitWhereItem, Error> {
+        if self.peek(LParen)? {
+            let first = self.expect(LParen)?;
+            let left = if self.consume(RParen)? {
+                Vec::new()
+            } else {
+                let mut left = vec![self.name()?];
+                while !self.peek(RParen)? && !self.peek([Comma, RParen])? {
+                    self.expect(Comma)?;
+                    left.push(self.name()?);
+                }
+                self.consume(Comma)?;
+                self.consume(RParen)?;
+                left
+            };
+
+            let dash = self.expect(Dash)?;
+            let gt = self.expect(Gt)?;
+            dash.span.by(gt.span, self.tokens.code())?;
+            let right = self.name()?;
+
+            let span = first.span.to(right.span);
+            Ok(TraitWhereItem::Dependency { left, right, span })
+        } else if self.peek([Ident, Colon])? {
+            let param = self.name()?;
+            self.expect(Colon)?;
+
+            let mut bounds = vec![self.trait_bound()?];
+            while self.peek(Plus)? {
+                self.expect(Plus)?;
+                bounds.push(self.trait_bound()?);
+            }
+
+            let span = param.span.to(bounds.last().unwrap().span());
+            Ok(TraitWhereItem::Bound {
+                param,
+                bounds,
+                span,
+            })
+        } else {
+            let left = self.name()?;
+            let dash = self.expect(Dash)?;
+            let gt = self.expect(Gt)?;
+            dash.span.by(gt.span, self.tokens.code())?;
+            let right = self.name()?;
+
+            let span = left.span.to(right.span);
+            Ok(TraitWhereItem::Dependency {
+                left: vec![left],
+                right,
+                span,
+            })
         }
     }
 
@@ -2051,7 +2124,7 @@ impl<'a> Parser<'a> {
         let first = self.expect(Where)?;
 
         let mut items = vec![self.where_item()?];
-        while self.peek([Comma, Ident])? || self.peek([Comma, SelfType])? {
+        while self.peek([Comma, Ident])? {
             self.expect(Comma)?;
             items.push(self.where_item()?);
         }

@@ -6,9 +6,9 @@ use crate::{color, reset};
 
 #[derive(Debug)]
 pub struct Error {
-    msg: String,
-    span: Option<Span>,
-    notes: Vec<Note>,
+    pub msg: String,
+    pub span: Option<Span>,
+    pub notes: Vec<Note>,
 }
 
 impl Error {
