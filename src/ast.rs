@@ -121,8 +121,21 @@ pub enum UnloadedItem {
         name: Name,
         span: Span,
     },
-    Extern {
-        items: Vec<ExternItem>,
+    ExternFn {
+        is_pub: bool,
+        signature: Signature,
+        span: Span,
+    },
+    ExternType {
+        is_pub: bool,
+        name: Name,
+        info: Option<ExternTypeInfo>,
+        span: Span,
+    },
+    ExternStatic {
+        is_pub: bool,
+        name: Name,
+        ty: Ty,
         span: Span,
     },
     Trait {
@@ -172,7 +185,9 @@ impl UnloadedItem {
             | UnloadedItem::Enum { span, .. }
             | UnloadedItem::Type { span, .. }
             | UnloadedItem::Mod { span, .. }
-            | UnloadedItem::Extern { span, .. }
+            | UnloadedItem::ExternFn { span, .. }
+            | UnloadedItem::ExternType { span, .. }
+            | UnloadedItem::ExternStatic { span, .. }
             | UnloadedItem::Trait { span, .. }
             | UnloadedItem::Fn { span, .. }
             | UnloadedItem::Impl { span, .. }
@@ -216,8 +231,21 @@ pub enum Item {
         span: Span,
         items: Vec<Item>,
     },
-    Extern {
-        items: Vec<ExternItem>,
+    ExternFn {
+        is_pub: bool,
+        signature: Signature,
+        span: Span,
+    },
+    ExternType {
+        is_pub: bool,
+        name: Name,
+        info: Option<ExternTypeInfo>,
+        span: Span,
+    },
+    ExternStatic {
+        is_pub: bool,
+        name: Name,
+        ty: Ty,
         span: Span,
     },
     Trait {
@@ -267,7 +295,9 @@ impl Item {
             | Item::Enum { span, .. }
             | Item::Type { span, .. }
             | Item::Mod { span, .. }
-            | Item::Extern { span, .. }
+            | Item::ExternFn { span, .. }
+            | Item::ExternType { span, .. }
+            | Item::ExternStatic { span, .. }
             | Item::Trait { span, .. }
             | Item::Fn { span, .. }
             | Item::Impl { span, .. }
@@ -330,7 +360,37 @@ impl TryFrom<UnloadedItem> for Item {
                 span,
             }),
             UnloadedItem::Mod { is_pub, name, span } => Err((is_pub, name, span)),
-            UnloadedItem::Extern { items, span } => Ok(Item::Extern { items, span }),
+            UnloadedItem::ExternFn {
+                is_pub,
+                signature,
+                span,
+            } => Ok(Item::ExternFn {
+                is_pub,
+                signature,
+                span,
+            }),
+            UnloadedItem::ExternType {
+                is_pub,
+                name,
+                info,
+                span,
+            } => Ok(Item::ExternType {
+                is_pub,
+                name,
+                info,
+                span,
+            }),
+            UnloadedItem::ExternStatic {
+                is_pub,
+                name,
+                ty,
+                span,
+            } => Ok(Item::ExternStatic {
+                is_pub,
+                name,
+                ty,
+                span,
+            }),
             UnloadedItem::Trait {
                 is_pub,
                 name,
@@ -431,37 +491,6 @@ pub struct EnumItem {
     pub name: Name,
     pub tuple: Option<Vec<Ty>>,
     pub span: Span,
-}
-
-#[derive(Debug)]
-pub enum ExternItem {
-    Fn {
-        is_pub: bool,
-        signature: Signature,
-        span: Span,
-    },
-    Type {
-        is_pub: bool,
-        name: Name,
-        info: Option<ExternTypeInfo>,
-        span: Span,
-    },
-    Static {
-        is_pub: bool,
-        name: Name,
-        ty: Ty,
-        span: Span,
-    },
-}
-
-impl ExternItem {
-    pub fn span(&self) -> Span {
-        match self {
-            ExternItem::Fn { span, .. }
-            | ExternItem::Type { span, .. }
-            | ExternItem::Static { span, .. } => *span,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -615,16 +644,12 @@ pub enum Stmt {
         name: Name,
         generic_params: Option<GenericParams>,
         ty: Ty,
-        span: Span,  
+        span: Span,
     },
     Enum {
         name: Name,
         generic_params: Option<GenericParams>,
         items: Vec<EnumItem>,
-        span: Span,
-    },
-    Extern {
-        items: Vec<ExternItem>,
         span: Span,
     },
     Fn {
@@ -655,7 +680,6 @@ impl Stmt {
             | Stmt::Struct { span, .. }
             | Stmt::Enum { span, .. }
             | Stmt::Type { span, .. }
-            | Stmt::Extern { span, .. }
             | Stmt::Fn { span, .. }
             | Stmt::Const { span, .. }
             | Stmt::Static { span, .. } => *span,
@@ -700,8 +724,18 @@ impl TryFrom<UnloadedItem> for Stmt {
                 items,
                 span,
             }),
-            UnloadedItem::Type { name, generic_params, ty, span, .. } => Ok(Stmt::Type { name, generic_params, ty, span }),
-            UnloadedItem::Extern { items, span } => Ok(Stmt::Extern { items, span }),
+            UnloadedItem::Type {
+                name,
+                generic_params,
+                ty,
+                span,
+                ..
+            } => Ok(Stmt::Type {
+                name,
+                generic_params,
+                ty,
+                span,
+            }),
             UnloadedItem::Fn {
                 signature,
                 block,
@@ -736,9 +770,12 @@ impl TryFrom<UnloadedItem> for Stmt {
                 expr,
                 span,
             }),
-            UnloadedItem::Trait { .. } | UnloadedItem::Mod { .. } | UnloadedItem::Impl { .. } => {
-                Err(())
-            }
+            UnloadedItem::ExternFn { .. }
+            | UnloadedItem::ExternType { .. }
+            | UnloadedItem::ExternStatic { .. }
+            | UnloadedItem::Trait { .. }
+            | UnloadedItem::Mod { .. }
+            | UnloadedItem::Impl { .. } => Err(()),
         }
     }
 }

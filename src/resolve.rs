@@ -6,6 +6,7 @@ use crate::hir::HirId;
 use crate::io::{FileId, FileMap};
 use crate::span::Span;
 
+/*
 #[derive(Debug)]
 enum NameNode {
     Mod {
@@ -534,7 +535,7 @@ impl<'a> Walker<'a> {
                     }
                     self.stack.pop();
                 }
-                Item:: Type { .. } => todo!(),
+                Item::Type { .. } => todo!(),
                 Item::Mod { items, .. } => {
                     let frame = self.stack.pop().unwrap();
                     self.walk(items)?;
@@ -1822,11 +1823,13 @@ impl<'a> Walker<'a> {
         Resolved
     }
 }
+*/
 
 #[derive(Debug)]
 pub struct Resolved;
 
 pub fn resolve(crates: &HashMap<String, Vec<Item>>, map: &FileMap) -> Result<Resolved, Error> {
+    /*
     let mut tree = HashMap::new();
 
     for (name, items) in crates {
@@ -1864,4 +1867,6 @@ pub fn resolve(crates: &HashMap<String, Vec<Item>>, map: &FileMap) -> Result<Res
     println!("resolved: {crates:#?}");
 
     Ok(walker.resolved())
+    */
+    todo!()
 }

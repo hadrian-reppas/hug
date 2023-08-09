@@ -86,12 +86,12 @@ impl<'a> Parser<'a> {
     fn items(&mut self) -> Result<Vec<UnloadedItem>, Error> {
         let mut items = Vec::new();
         while !self.peek(Eof)? {
-            items.push(self.item(true)?);
+            items.push(self.item()?);
         }
         Ok(items)
     }
 
-    fn item(&mut self, is_top_level: bool) -> Result<UnloadedItem, Error> {
+    fn item(&mut self) -> Result<UnloadedItem, Error> {
         let pub_span = if self.peek(Pub)? {
             Some(self.next()?.span)
         } else {
@@ -109,7 +109,7 @@ impl<'a> Parser<'a> {
             Static => self.static_decl(pub_span),
             Use => self.use_decl(pub_span),
             Mod => self.module(pub_span),
-            Extern => self.extern_block(pub_span, is_top_level),
+            Extern => self.extern_item(pub_span),
             kind => Err(Error::new(
                 format!("expected item, found {}", kind.desc()),
                 Some(self.peek_span()?),
@@ -644,8 +644,8 @@ impl<'a> Parser<'a> {
         while !self.peek(RBrace)? {
             match self.peek_kind()? {
                 Let => stmts.push(self.local()?),
-                Use | Struct | Enum | Type | Extern | Fn | Const | Static => {
-                    stmts.push(self.item(false)?.try_into().unwrap())
+                Use | Struct | Enum | Type | Fn | Const | Static => {
+                    stmts.push(self.item()?.try_into().unwrap())
                 }
                 Semi => {
                     self.expect(Semi)?;
@@ -1687,62 +1687,22 @@ impl<'a> Parser<'a> {
         Ok(Label { name, span })
     }
 
-    fn extern_block(
-        &mut self,
-        pub_span: Option<Span>,
-        allow_pub: bool,
-    ) -> Result<UnloadedItem, Error> {
-        self.disallow_pub(pub_span, Extern)?;
-
-        let first = self.expect(Extern)?;
-        self.expect(LBrace)?;
-        let mut items = Vec::new();
-        while !self.peek(RBrace)? {
-            items.push(self.extern_item(allow_pub)?);
-        }
-        let last = self.expect(RBrace)?;
-
-        let span = first.span.to(last.span);
-        Ok(UnloadedItem::Extern { items, span })
-    }
-
-    fn extern_item(&mut self, allow_pub: bool) -> Result<ExternItem, Error> {
-        let pub_span = if self.peek(Pub)? {
-            if allow_pub {
-                Some(self.next()?.span)
-            } else {
-                return Err(Error::new(
-                    format!("{} not allowed here", Pub.desc()),
-                    Some(self.peek_span()?),
-                ));
-            }
-        } else {
-            None
-        };
+    fn extern_item(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
+        let (first_span, is_pub) = self.handle_pub(pub_span, Extern)?;
 
         match self.peek_kind()? {
             Fn => {
                 let signature = self.signature()?;
-                let last = self.expect(Semi)?;
-                let (span, is_pub) = if let Some(span) = pub_span {
-                    (span.to(last.span), true)
-                } else {
-                    (signature.span.to(last.span), false)
-                };
-                Ok(ExternItem::Fn {
+                let last = self.expect(Semi)?.span;
+                let span = first_span.to(last);
+                Ok(UnloadedItem::ExternFn {
                     is_pub,
                     signature,
                     span,
                 })
             }
             Type => {
-                let (first_span, is_pub) = if let Some(span) = pub_span {
-                    self.expect(Type)?;
-                    (span, true)
-                } else {
-                    (self.expect(Type)?.span, false)
-                };
-
+                self.expect(Type)?;
                 let name = self.name()?;
                 let info = if self.consume(Eq)? {
                     let name = self.name()?;
@@ -1764,7 +1724,7 @@ impl<'a> Parser<'a> {
                 let last = self.expect(Semi)?;
 
                 let span = first_span.to(last.span);
-                Ok(ExternItem::Type {
+                Ok(UnloadedItem::ExternType {
                     is_pub,
                     name,
                     info,
@@ -1772,20 +1732,14 @@ impl<'a> Parser<'a> {
                 })
             }
             Static => {
-                let (first_span, is_pub) = if let Some(span) = pub_span {
-                    self.expect(Static)?;
-                    (span, true)
-                } else {
-                    (self.expect(Static)?.span, false)
-                };
-
+                self.expect(Static)?;
                 let name = self.name()?;
                 self.expect(Colon)?;
                 let ty = self.ty()?;
                 let last = self.expect(Semi)?;
 
                 let span = first_span.to(last.span);
-                Ok(ExternItem::Static {
+                Ok(UnloadedItem::ExternStatic {
                     is_pub,
                     name,
                     ty,
@@ -1794,8 +1748,7 @@ impl<'a> Parser<'a> {
             }
             kind => Err(Error::new(
                 format!(
-                    "expected {}, {}, {} or {}, found {}",
-                    Pub.desc(),
+                    "expected {}, {} or {}, found {}",
                     Fn.desc(),
                     Type.desc(),
                     Static.desc(),

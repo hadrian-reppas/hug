@@ -4,7 +4,7 @@
 
 - [x] Remove unique keyword
 - [x] Bring back type aliases
+- [x] Change sytanx for extern fns/types/statics
 - [ ] Add syntax for functional dependencies
-- [ ] Change sytanx for extern fns/types/statics
 - [ ] Nuke name resolution
 - [ ] Reimplement name resolution
