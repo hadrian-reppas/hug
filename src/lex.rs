@@ -37,7 +37,7 @@ impl<'a> Tokens<'a> {
     }
 
     pub fn next(&mut self) -> Result<Token, Error> {
-        self.skip_whitespace();
+        self.skip_whitespace()?;
         if self.suffix.is_empty() {
             Ok(Token {
                 kind: TokenKind::Eof,
@@ -75,12 +75,47 @@ impl<'a> Tokens<'a> {
         span
     }
 
-    fn skip_whitespace(&mut self) {
+    fn skip_whitespace(&mut self) -> Result<(), Error> {
         let mut len = 0;
-        while self.suffix[len..].starts_with(char::is_whitespace) {
+        while self.suffix[len..].starts_with(|c: char| c.is_ascii_whitespace()) {
             len += 1;
         }
+        self.ensure_valid_whitespace(&self.suffix[..len])?;
         self.make_span(len);
+        Ok(())
+    }
+
+    fn ensure_valid_whitespace(&mut self, slice: &str) -> Result<(), Error> {
+        for (i, c) in slice.chars().enumerate() {
+            match c {
+                '\n' | ' ' => {}
+                '\r' => {
+                    if slice.as_bytes().get(i + 1) != Some(&b'\n') {
+                        let _ = self.make_span(i);
+                        let span = self.make_span(1);
+                        return Err(Error::new("lonely '\\r' character", Some(span)).note(
+                            "'\\r' characters must be followed by a '\\n' character",
+                            None,
+                        ));
+                    }
+                }
+                '\t' => {
+                    let _ = self.make_span(i);
+                    let span = self.make_span(1);
+                    return Err(Error::new("illegal whitespace character '\\t'", Some(span))
+                        .note("tabs are not allowed", None));
+                }
+                _ => {
+                    let _ = self.make_span(i);
+                    let span = self.make_span(1);
+                    return Err(Error::new(
+                        format!("illegal whitespace character {c:?}"),
+                        Some(span),
+                    ));
+                }
+            }
+        }
+        Ok(())
     }
 
     fn next_token(&mut self) -> Result<Token, Error> {

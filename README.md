@@ -6,6 +6,6 @@
 - [x] Bring back type aliases
 - [x] Change sytanx for extern fns/types/statics
 - [x] Add syntax for functional dependencies
-- [ ] Disallow tab characters
+- [x] Disallow tab characters
 - [ ] Nuke name resolution
 - [ ] Reimplement name resolution
