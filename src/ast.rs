@@ -37,7 +37,7 @@ pub enum Ty {
         span: Span,
     },
     Ptr {
-        mut_span: Option<Span>,
+        is_mut: bool,
         ty: Box<Ty>,
         span: Span,
     },

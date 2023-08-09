@@ -137,16 +137,12 @@ impl<'a> Parser<'a> {
             }
             Star => {
                 let star_span = self.expect(Star)?.span;
-                let mut_span = if self.peek(Mut)? {
-                    Some(self.expect(Mut)?.span)
-                } else {
-                    None
-                };
+                let is_mut = self.consume(Mut)?;
                 let ty = self.ty()?;
 
                 let span = star_span.to(ty.span());
                 Ok(Ty::Ptr {
-                    mut_span,
+                    is_mut,
                     ty: Box::new(ty),
                     span,
                 })
