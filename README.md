@@ -11,6 +11,6 @@
 - [x] Allow mut keyword in struct field patterns
 - [x] Parse or patterns
 - [x] Parse literals in patterns
-- [ ] Fix span printing
+- [x] Fix span printing
 - [ ] Nuke name resolution
 - [ ] Reimplement name resolution

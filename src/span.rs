@@ -130,7 +130,6 @@ impl Span {
         let last_line_num = format!("{}", self.location.line + lines.len());
         let num_width = last_line_num.len();
         let space = " ".repeat(num_width);
-        let last_len = lines.last().unwrap().1.len();
 
         let mut ellipsis = false;
         if lines.len() > 2 * MAX_LINES + 1 {
@@ -146,6 +145,8 @@ impl Span {
                 .skip(1)
                 .for_each(|(_, line)| *line = &line[offset..]);
         }
+
+        let last_len = lines.last().unwrap().1.len();
 
         write!(out, "{}{}-->{} ", space, color!(Blue, color), reset!(color))?;
         self.location.write(out, map)?;
@@ -196,17 +197,30 @@ impl Span {
                     reset!(color)
                 )?;
             }
-            writeln!(
-                out,
-                "{}{:>num_width$} |{} {}|{} {}{}",
-                color!(Blue, color),
-                i,
-                reset!(color),
-                color!(Red, color),
-                reset!(color),
-                line,
-                suffix,
-            )?;
+            if j == lines.len() - 2 {
+                writeln!(
+                    out,
+                    "{}{:>num_width$} |{} {}|{} {}{}",
+                    color!(Blue, color),
+                    i,
+                    reset!(color),
+                    color!(Red, color),
+                    reset!(color),
+                    line,
+                    suffix
+                )?;
+            } else {
+                writeln!(
+                    out,
+                    "{}{:>num_width$} |{} {}|{} {}",
+                    color!(Blue, color),
+                    i,
+                    reset!(color),
+                    color!(Red, color),
+                    reset!(color),
+                    line
+                )?;
+            }
         }
 
         write!(
