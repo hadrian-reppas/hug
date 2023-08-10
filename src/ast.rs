@@ -23,6 +23,16 @@ pub struct Path {
     pub span: Span,
 }
 
+impl Path {
+    pub fn into_name(mut self) -> Result<Name, Self> {
+        if self.crate_span.is_none() && self.path.len() == 1 {
+            Ok(self.path.pop().unwrap())
+        } else {
+            Err(self)
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct PurePath {
     pub path: Vec<Name>,
@@ -154,7 +164,7 @@ pub enum UnloadedItem {
         span: Span,
     },
     Impl {
-        name: Name,
+        path: Path,
         generic_params: Option<GenericParams>,
         as_trait: Option<TraitBound>,
         where_clause: Option<WhereClause>,
@@ -264,7 +274,7 @@ pub enum Item {
         span: Span,
     },
     Impl {
-        name: Name,
+        path: Path,
         generic_params: Option<GenericParams>,
         as_trait: Option<TraitBound>,
         where_clause: Option<WhereClause>,
@@ -420,14 +430,14 @@ impl TryFrom<UnloadedItem> for Item {
                 span,
             }),
             UnloadedItem::Impl {
-                name,
+                path,
                 generic_params,
                 as_trait,
                 where_clause,
                 fns,
                 span,
             } => Ok(Item::Impl {
-                name,
+                path,
                 generic_params,
                 as_trait,
                 where_clause,
@@ -1219,6 +1229,11 @@ pub enum Pattern {
     Wild {
         span: Span,
     },
+    Name {
+        is_mut: bool,
+        name: Name,
+        span: Span,
+    },
     Path {
         path: Path,
         span: Span,
@@ -1242,39 +1257,62 @@ pub enum Pattern {
         array: Vec<Pattern>,
         span: Span,
     },
+    Or {
+        patterns: Vec<Pattern>,
+        span: Span,
+    },
+    Literal {
+        kind: PatternLiteralKind,
+        span: Span,
+    },
 }
 
 impl Pattern {
     pub fn span(&self) -> Span {
         match self {
             Pattern::Wild { span, .. }
+            | Pattern::Name { span, .. }
             | Pattern::Path { span, .. }
             | Pattern::Struct { span, .. }
             | Pattern::Enum { span, .. }
             | Pattern::Tuple { span, .. }
-            | Pattern::Array { span, .. } => *span,
-        }
-    }
-
-    pub fn into_name(self) -> Result<Name, Span> {
-        let span = self.span();
-        if let Pattern::Path { mut path, .. } = self {
-            if path.path.len() == 1 {
-                Ok(path.path.pop().unwrap())
-            } else {
-                Err(span)
-            }
-        } else {
-            Err(span)
+            | Pattern::Array { span, .. }
+            | Pattern::Or { span, .. }
+            | Pattern::Literal { span, .. } => *span,
         }
     }
 }
 
 #[derive(Debug)]
-pub struct FieldPattern {
-    pub name: Name,
-    pub pattern: Option<Pattern>,
-    pub span: Span,
+pub enum PatternLiteralKind {
+    Int,
+    Char,
+    String,
+    Byte,
+    ByteString,
+    Bool,
+}
+
+#[derive(Debug)]
+pub enum FieldPattern {
+    Name {
+        is_mut: bool,
+        name: Name,
+        span: Span,
+    },
+    Pattern {
+        name: Name,
+        pattern: Pattern,
+        span: Span,
+    },
+}
+
+impl FieldPattern {
+    pub fn span(&self) -> Span {
+        match self {
+            FieldPattern::Name { span, .. } | FieldPattern::Pattern { span, .. } => *span,
+        }
+    }
 }
 
 #[derive(Debug)]

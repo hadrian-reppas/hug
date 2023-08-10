@@ -1709,15 +1709,6 @@ impl<'a> Parser<'a> {
         let first = self.expect(Match)?;
         let expr = self.expr(BindingPower::Start, false)?;
         self.expect(LBrace)?;
-        if self.peek(RBrace)? {
-            let last = self.expect(RBrace)?;
-            let span = first.span.to(last.span);
-            return Ok(Expr::Match {
-                expr: Box::new(expr),
-                arms: Vec::new(),
-                span,
-            });
-        }
 
         let mut arms = Vec::new();
         while !self.peek(RBrace)? {
@@ -1920,14 +1911,12 @@ impl<'a> Parser<'a> {
                 .by(second.span, self.tokens.code())?
                 .by(last.span, self.tokens.code())?;
 
-            let name = match pattern.into_name() {
-                Ok(name) => name,
-                Err(span) => {
-                    return Err(Error::new(
-                        "variadic arguments cannot be deconstructed",
-                        Some(span),
-                    ))
-                }
+            let span = pattern.span();
+            let Pattern::Name { name, .. } = pattern else {
+                return Err(Error::new(
+                    "variadic arguments cannot be deconstructed",
+                    Some(span),
+                ));
             };
 
             let span = name.span.to(dots);
@@ -1953,14 +1942,12 @@ impl<'a> Parser<'a> {
                     .by(second.span, self.tokens.code())?
                     .by(last.span, self.tokens.code())?;
 
-                let name = match pattern.into_name() {
-                    Ok(name) => name,
-                    Err(span) => {
-                        return Err(Error::new(
-                            "variadic arguments cannot be deconstructed",
-                            Some(span),
-                        ))
-                    }
+                let span = pattern.span();
+                let Pattern::Name { name, .. } = pattern else {
+                    return Err(Error::new(
+                        "variadic arguments cannot be deconstructed",
+                        Some(span),
+                    ));
                 };
 
                 let span = name.span.to(dots);
@@ -1977,6 +1964,21 @@ impl<'a> Parser<'a> {
     }
 
     fn pattern(&mut self) -> Result<Pattern, Error> {
+        let mut patterns = vec![self.single_pattern()?];
+        while self.consume(Bar)? {
+            patterns.push(self.single_pattern()?);
+        }
+        if patterns.len() == 1 {
+            Ok(patterns.pop().unwrap())
+        } else {
+            let first_span = patterns[0].span();
+            let last_span = patterns.last().unwrap().span();
+            let span = first_span.to(last_span);
+            Ok(Pattern::Or { patterns, span })
+        }
+    }
+
+    fn single_pattern(&mut self) -> Result<Pattern, Error> {
         if self.peek(Under)? {
             let span = self.expect(Under)?.span;
             Ok(Pattern::Wild { span })
@@ -1990,8 +1992,24 @@ impl<'a> Parser<'a> {
                 Ok(Pattern::Enum { path, tuple, span })
             } else {
                 let span = path.span;
-                Ok(Pattern::Path { path, span })
+                match path.into_name() {
+                    Ok(name) => Ok(Pattern::Name {
+                        is_mut: false,
+                        name,
+                        span,
+                    }),
+                    Err(path) => Ok(Pattern::Path { path, span }),
+                }
             }
+        } else if self.peek(Mut)? {
+            let first = self.expect(Mut)?;
+            let name = self.name()?;
+            let span = first.span.to(name.span);
+            Ok(Pattern::Name {
+                is_mut: true,
+                name,
+                span,
+            })
         } else if self.peek(LParen)? {
             let (tuple, span) = self.tuple_pattern(false)?;
             Ok(Pattern::Tuple { tuple, span })
@@ -2016,6 +2034,46 @@ impl<'a> Parser<'a> {
 
             let span = first.span.to(last.span);
             Ok(Pattern::Array { array, span })
+        } else if self.peek(Int)? {
+            Ok(Pattern::Literal {
+                kind: PatternLiteralKind::Int,
+                span: self.expect(Int)?.span,
+            })
+        } else if self.peek(Char)? {
+            Ok(Pattern::Literal {
+                kind: PatternLiteralKind::Char,
+                span: self.expect(Char)?.span,
+            })
+        } else if self.peek(String)? {
+            Ok(Pattern::Literal {
+                kind: PatternLiteralKind::String,
+                span: self.expect(String)?.span,
+            })
+        } else if self.peek(ByteString)? {
+            Ok(Pattern::Literal {
+                kind: PatternLiteralKind::ByteString,
+                span: self.expect(ByteString)?.span,
+            })
+        } else if self.peek(Byte)? {
+            Ok(Pattern::Literal {
+                kind: PatternLiteralKind::Byte,
+                span: self.expect(Byte)?.span,
+            })
+        } else if self.peek(True)? {
+            Ok(Pattern::Literal {
+                kind: PatternLiteralKind::Bool,
+                span: self.expect(True)?.span,
+            })
+        } else if self.peek(False)? {
+            Ok(Pattern::Literal {
+                kind: PatternLiteralKind::Bool,
+                span: self.expect(False)?.span,
+            })
+        } else if self.peek(Float)? {
+            Err(Error::new(
+                "floating-point types cannot be used in patterns",
+                Some(self.peek_span()?),
+            ))
         } else {
             Err(Error::new(
                 format!("expected pattern, found {}", self.peek_kind()?.desc()),
@@ -2074,22 +2132,33 @@ impl<'a> Parser<'a> {
     }
 
     fn field_pattern(&mut self) -> Result<FieldPattern, Error> {
-        let name = self.name()?;
-        if self.consume(Colon)? {
-            let pattern = self.pattern()?;
-            let span = name.span.to(pattern.span());
-            Ok(FieldPattern {
+        if self.peek(Mut)? {
+            let first = self.expect(Mut)?;
+            let name = self.name()?;
+            let span = first.span.to(name.span);
+            Ok(FieldPattern::Name {
+                is_mut: true,
                 name,
-                pattern: Some(pattern),
                 span,
             })
         } else {
-            let span = name.span;
-            Ok(FieldPattern {
-                name,
-                pattern: None,
-                span,
-            })
+            let name = self.name()?;
+            if self.consume(Colon)? {
+                let pattern = self.pattern()?;
+                let span = name.span.to(pattern.span());
+                Ok(FieldPattern::Pattern {
+                    name,
+                    pattern,
+                    span,
+                })
+            } else {
+                let span = name.span;
+                Ok(FieldPattern::Name {
+                    is_mut: false,
+                    name,
+                    span,
+                })
+            }
         }
     }
 
@@ -2233,7 +2302,7 @@ impl<'a> Parser<'a> {
         self.disallow_pub(pub_span, Impl)?;
 
         let first = self.expect(Impl)?;
-        let name = self.name()?;
+        let path = self.path()?;
         let generic_params = if self.peek(Lt)? {
             Some(self.generic_params()?)
         } else {
@@ -2259,7 +2328,7 @@ impl<'a> Parser<'a> {
 
         let span = first.span.to(last.span);
         Ok(UnloadedItem::Impl {
-            name,
+            path,
             generic_params,
             as_trait,
             where_clause,
