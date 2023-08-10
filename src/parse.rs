@@ -285,18 +285,16 @@ impl<'a> Parser<'a> {
         self.disallow_pub(pub_span, Use)?;
 
         let first = self.expect(Use)?;
-        let crate_span = if self.peek(Crate)? {
-            let crate_span = self.expect(Crate)?.span;
+        let has_crate_prefix = self.consume(Crate)?;
+        if has_crate_prefix {
             self.expect(Colon)?;
             self.expect(Colon)?;
-            Some(crate_span)
-        } else {
-            None
-        };
+        }
+
         let tree = self.use_tree()?;
         let last = self.expect(Semi)?;
         Ok(UnloadedItem::Use {
-            crate_span,
+            has_crate_prefix,
             tree,
             span: first.span.to(last.span),
         })
@@ -1544,14 +1542,11 @@ impl<'a> Parser<'a> {
     }
 
     fn generic_path(&mut self) -> Result<GenericPath, Error> {
-        let crate_span = if self.peek(Crate)? {
-            let crate_span = self.expect(Crate)?.span;
+        let has_crate_prefix = self.consume(Crate)?;
+        if has_crate_prefix {
             self.expect(Colon)?;
             self.expect(Colon)?;
-            Some(crate_span)
-        } else {
-            None
-        };
+        }
 
         let mut segments = vec![self.generic_segment()?];
         while self.peek([Colon, Colon, Ident])? {
@@ -1563,7 +1558,7 @@ impl<'a> Parser<'a> {
 
         let span = segments[0].span.to(segments.last().unwrap().span);
         Ok(GenericPath {
-            crate_span,
+            has_crate_prefix,
             segments,
             span,
         })
@@ -2439,14 +2434,11 @@ impl<'a> Parser<'a> {
     }
 
     fn path(&mut self) -> Result<Path, Error> {
-        let crate_span = if self.peek(Crate)? {
-            let crate_span = self.expect(Crate)?.span;
+        let has_crate_prefix = self.consume(Crate)?;
+        if has_crate_prefix {
             self.expect(Colon)?;
             self.expect(Colon)?;
-            Some(crate_span)
-        } else {
-            None
-        };
+        }
 
         let mut path = vec![self.name()?];
         while self.peek([Colon, Colon, Ident])? {
@@ -2456,7 +2448,7 @@ impl<'a> Parser<'a> {
         }
         let span = path[0].span.to(path.last().unwrap().span);
         Ok(Path {
-            crate_span,
+            has_crate_prefix,
             path,
             span,
         })

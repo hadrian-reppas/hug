@@ -18,14 +18,14 @@ impl Debug for Name {
 
 #[derive(Debug)]
 pub struct Path {
-    pub crate_span: Option<Span>,
+    pub has_crate_prefix: bool,
     pub path: Vec<Name>,
     pub span: Span,
 }
 
 impl Path {
     pub fn into_name(mut self) -> Result<Name, Self> {
-        if self.crate_span.is_none() && self.path.len() == 1 {
+        if !self.has_crate_prefix && self.path.len() == 1 {
             Ok(self.path.pop().unwrap())
         } else {
             Err(self)
@@ -101,7 +101,7 @@ pub struct GenericArgs {
 #[derive(Debug)]
 pub enum UnloadedItem {
     Use {
-        crate_span: Option<Span>,
+        has_crate_prefix: bool,
         tree: UseTree,
         span: Span,
     },
@@ -210,7 +210,7 @@ impl UnloadedItem {
 #[derive(Debug)]
 pub enum Item {
     Use {
-        crate_span: Option<Span>,
+        has_crate_prefix: bool,
         tree: UseTree,
         span: Span,
     },
@@ -322,11 +322,11 @@ impl TryFrom<UnloadedItem> for Item {
     fn try_from(item: UnloadedItem) -> Result<Item, (bool, Name, Span)> {
         match item {
             UnloadedItem::Use {
-                crate_span,
+                has_crate_prefix,
                 tree,
                 span,
             } => Ok(Item::Use {
-                crate_span,
+                has_crate_prefix,
                 tree,
                 span,
             }),
@@ -668,7 +668,7 @@ pub enum Stmt {
         span: Span,
     },
     Use {
-        crate_span: Option<Span>,
+        has_crate_prefix: bool,
         tree: UseTree,
         span: Span,
     },
@@ -730,11 +730,11 @@ impl TryFrom<UnloadedItem> for Stmt {
     fn try_from(item: UnloadedItem) -> Result<Stmt, ()> {
         match item {
             UnloadedItem::Use {
-                crate_span,
+                has_crate_prefix,
                 tree,
                 span,
             } => Ok(Stmt::Use {
-                crate_span,
+                has_crate_prefix,
                 tree,
                 span,
             }),
@@ -1072,7 +1072,7 @@ impl Expr {
 
 #[derive(Debug)]
 pub struct GenericPath {
-    pub crate_span: Option<Span>,
+    pub has_crate_prefix: bool,
     pub segments: Vec<GenericSegment>,
     pub span: Span,
 }
