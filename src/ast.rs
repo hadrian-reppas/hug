@@ -101,6 +101,7 @@ pub struct GenericArgs {
 #[derive(Debug)]
 pub enum UnloadedItem {
     Use {
+        is_pub: bool,
         has_crate_prefix: bool,
         tree: UseTree,
         span: Span,
@@ -210,6 +211,7 @@ impl UnloadedItem {
 #[derive(Debug)]
 pub enum Item {
     Use {
+        is_pub: bool,
         has_crate_prefix: bool,
         tree: UseTree,
         span: Span,
@@ -322,10 +324,12 @@ impl TryFrom<UnloadedItem> for Item {
     fn try_from(item: UnloadedItem) -> Result<Item, (bool, Name, Span)> {
         match item {
             UnloadedItem::Use {
+                is_pub,
                 has_crate_prefix,
                 tree,
                 span,
             } => Ok(Item::Use {
+                is_pub,
                 has_crate_prefix,
                 tree,
                 span,
@@ -733,6 +737,7 @@ impl TryFrom<UnloadedItem> for Stmt {
                 has_crate_prefix,
                 tree,
                 span,
+                ..
             } => Ok(Stmt::Use {
                 has_crate_prefix,
                 tree,

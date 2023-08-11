@@ -282,9 +282,8 @@ impl<'a> Parser<'a> {
     }
 
     fn use_decl(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
-        self.disallow_pub(pub_span, Use)?;
+        let (first_span, is_pub) = self.handle_pub(pub_span, Use)?;
 
-        let first = self.expect(Use)?;
         let has_crate_prefix = self.consume(Crate)?;
         if has_crate_prefix {
             self.expect(Colon)?;
@@ -294,9 +293,10 @@ impl<'a> Parser<'a> {
         let tree = self.use_tree()?;
         let last = self.expect(Semi)?;
         Ok(UnloadedItem::Use {
+            is_pub,
             has_crate_prefix,
             tree,
-            span: first.span.to(last.span),
+            span: first_span.to(last.span),
         })
     }
 

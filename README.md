@@ -12,5 +12,7 @@
 - [x] Parse or patterns
 - [x] Parse literals in patterns
 - [x] Fix span printing
+- [x] Parse pub use
+- [ ] Parse <Type as Trait>::function syntax
 - [ ] Nuke name resolution
 - [ ] Reimplement name resolution
