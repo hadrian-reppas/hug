@@ -19,6 +19,6 @@
 - [ ] Parse `<Type as Trait>::function` syntax
 - [ ] Allow extern items in stmts
 - [ ] Refactor pattern parsing
-- [ ] Parse `mut self` in signatures
+- [x] Parse `mut self` in signatures
 - [ ] Nuke name resolution
 - [ ] Reimplement name resolution

@@ -1954,15 +1954,21 @@ impl<'a> Parser<'a> {
         self.expect(LParen)?;
         let self_kind = if self.peek(Star)? {
             let first = self.expect(Star)?;
-            if self.consume(Mut)? {
-                let last = self.expect(SelfValue)?;
-                SelfKind::MutPtr(first.span.to(last.span))
-            } else {
-                let last = self.expect(SelfValue)?;
-                SelfKind::Ptr(first.span.to(last.span))
-            }
+            let is_mut = self.consume(Mut)?;
+            let last = self.expect(SelfValue)?;
+            let span = first.span.to(last.span);
+            SelfKind::Ptr { is_mut, span }
         } else if self.peek(SelfValue)? {
-            SelfKind::Value(self.expect(SelfValue)?.span)
+            let span = self.expect(SelfValue)?.span;
+            SelfKind::Value {
+                is_mut: false,
+                span,
+            }
+        } else if self.peek([Mut, SelfValue])? {
+            let first = self.expect(Mut)?;
+            let last = self.expect(SelfValue)?;
+            let span = first.span.to(last.span);
+            SelfKind::Value { is_mut: true, span }
         } else {
             SelfKind::None
         };

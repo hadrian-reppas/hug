@@ -618,16 +618,15 @@ pub struct GenericParams {
 
 #[derive(Debug)]
 pub enum SelfKind {
-    Ptr(Span),
-    MutPtr(Span),
-    Value(Span),
+    Ptr { is_mut: bool, span: Span },
+    Value { is_mut: bool, span: Span },
     None,
 }
 
 impl SelfKind {
     pub fn span(&self) -> Option<Span> {
         match self {
-            SelfKind::Ptr(span) | SelfKind::MutPtr(span) | SelfKind::Value(span) => Some(*span),
+            SelfKind::Ptr { span, .. } | SelfKind::Value { span, .. } => Some(*span),
             SelfKind::None => None,
         }
     }
