@@ -951,6 +951,8 @@ impl<'a> Parser<'a> {
                 span: self.expect(SelfValue)?.span,
             },
 
+            Lt => self.qualified_path()?,
+
             LParen => self.paren_expr()?,
             LBrack => self.brack_expr()?,
             LBrace => {
@@ -1582,6 +1584,28 @@ impl<'a> Parser<'a> {
             let span = path.span;
             Ok(Expr::Path { path, span })
         }
+    }
+
+    fn qualified_path(&mut self) -> Result<Expr, Error> {
+        let first = self.expect(Lt)?;
+        let ty = self.ty()?;
+        let as_trait = if self.consume(As)? {
+            Some(self.trait_bound()?)
+        } else {
+            None
+        };
+        self.expect(Gt)?;
+        self.expect(Colon)?;
+        self.expect(Colon)?;
+        let segment = self.generic_segment()?;
+
+        let span = first.span.to(segment.span);
+        Ok(Expr::QualifiedPath {
+            ty,
+            as_trait,
+            segment,
+            span,
+        })
     }
 
     fn macro_expr(&mut self) -> Result<Expr, Error> {

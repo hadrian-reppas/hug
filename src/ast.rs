@@ -1129,6 +1129,12 @@ pub enum Expr {
         path: GenericPath,
         span: Span,
     },
+    QualifiedPath {
+        ty: Ty,
+        as_trait: Option<TraitBound>,
+        segment: GenericSegment,
+        span: Span,
+    },
     Break {
         expr: Option<Box<Expr>>,
         span: Span,
@@ -1188,6 +1194,7 @@ impl Expr {
             | Expr::Index { span, .. }
             | Expr::Range { span, .. }
             | Expr::Path { span, .. }
+            | Expr::QualifiedPath { span, .. }
             | Expr::Break { span, .. }
             | Expr::Continue { span, .. }
             | Expr::Return { span, .. }

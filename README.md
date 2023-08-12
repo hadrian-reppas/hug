@@ -16,7 +16,7 @@
 - [x] Parse `#[rust(style, annotations)]`
 - [x] Parse annotations on impl fns/stmts/variants/fields
 - [x] Parse impl params and allow all types in impl blocks
-- [ ] Parse `<Type as Trait>::function` syntax
+- [x] Parse `<Type as Trait>::function` syntax
 - [x] Allow extern items in stmts
 - [x] Refactor pattern parsing
 - [x] Parse `mut self` in signatures
