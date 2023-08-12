@@ -815,7 +815,7 @@ impl<'a> Parser<'a> {
             let annotations = self.annotations()?;
             match self.peek_kind()? {
                 Let => stmts.push(self.local(annotations)?),
-                Use | Struct | Enum | Type | Fn | Const | Static => {
+                Use | Struct | Enum | Extern | Type | Fn | Const | Static => {
                     stmts.push(self.item(annotations)?.try_into().unwrap())
                 }
                 Semi => {
@@ -2076,7 +2076,7 @@ impl<'a> Parser<'a> {
                 };
 
                 let span = name.span.to(dots);
-                return Ok((Vec::new(), Some(Variadic { name, span })));
+                return Ok((params, Some(Variadic { name, span })));
             }
 
             let ty = self.ty()?;

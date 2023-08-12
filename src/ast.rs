@@ -782,6 +782,23 @@ pub enum Stmt {
         items: Vec<EnumItem>,
         span: Span,
     },
+    ExternFn {
+        annotations: Vec<Annotation>,
+        signature: Signature,
+        span: Span,
+    },
+    ExternType {
+        annotations: Vec<Annotation>,
+        name: Name,
+        info: Option<ExternTypeInfo>,
+        span: Span,
+    },
+    ExternStatic {
+        annotations: Vec<Annotation>,
+        name: Name,
+        ty: Ty,
+        span: Span,
+    },
     Fn {
         annotations: Vec<Annotation>,
         signature: Signature,
@@ -812,6 +829,9 @@ impl Stmt {
             | Stmt::Use { span, .. }
             | Stmt::Struct { span, .. }
             | Stmt::Enum { span, .. }
+            | Stmt::ExternFn { span, .. }
+            | Stmt::ExternType { span, .. }
+            | Stmt::ExternStatic { span, .. }
             | Stmt::Type { span, .. }
             | Stmt::Fn { span, .. }
             | Stmt::Const { span, .. }
@@ -918,12 +938,43 @@ impl TryFrom<UnloadedItem> for Stmt {
                 expr,
                 span,
             }),
-            UnloadedItem::ExternFn { .. }
-            | UnloadedItem::ExternType { .. }
-            | UnloadedItem::ExternStatic { .. }
-            | UnloadedItem::Trait { .. }
-            | UnloadedItem::Mod { .. }
-            | UnloadedItem::Impl { .. } => Err(()),
+            UnloadedItem::ExternFn {
+                annotations,
+                signature,
+                span,
+                ..
+            } => Ok(Stmt::ExternFn {
+                annotations,
+                signature,
+                span,
+            }),
+            UnloadedItem::ExternType {
+                annotations,
+                name,
+                info,
+                span,
+                ..
+            } => Ok(Stmt::ExternType {
+                annotations,
+                name,
+                info,
+                span,
+            }),
+            UnloadedItem::ExternStatic {
+                annotations,
+                name,
+                ty,
+                span,
+                ..
+            } => Ok(Stmt::ExternStatic {
+                annotations,
+                name,
+                ty,
+                span,
+            }),
+            UnloadedItem::Trait { .. } | UnloadedItem::Mod { .. } | UnloadedItem::Impl { .. } => {
+                Err(())
+            }
         }
     }
 }
