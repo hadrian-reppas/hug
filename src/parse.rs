@@ -2104,106 +2104,96 @@ impl<'a> Parser<'a> {
     }
 
     fn single_pattern(&mut self) -> Result<Pattern, Error> {
-        if self.peek(Under)? {
-            let span = self.expect(Under)?.span;
-            Ok(Pattern::Wild { span })
-        } else if self.peek(Ident)? || self.peek(Crate)? {
-            let path = self.path()?;
-            if self.peek(LBrace)? {
-                self.struct_pattern(path)
-            } else if self.peek(LParen)? {
-                let (tuple, last_span) = self.tuple_pattern(true)?;
-                let span = path.span.to(last_span);
-                Ok(Pattern::Enum { path, tuple, span })
-            } else {
-                let span = path.span;
-                match path.into_name() {
-                    Ok(name) => Ok(Pattern::Name {
-                        is_mut: false,
-                        name,
-                        span,
-                    }),
-                    Err(path) => Ok(Pattern::Path { path, span }),
+        macro_rules! literal {
+            ($name:ident) => {
+                Ok(Pattern::Literal {
+                    kind: PatternLiteralKind::$name,
+                    span: self.expect($name)?.span,
+                })
+            };
+        }
+        match self.peek_kind()? {
+            Under => {
+                let span = self.expect(Under)?.span;
+                Ok(Pattern::Wild { span })
+            }
+            Ident | Crate => {
+                let path = self.path()?;
+                if self.peek(LBrace)? {
+                    self.struct_pattern(path)
+                } else if self.peek(LParen)? {
+                    let (tuple, last_span) = self.tuple_pattern(true)?;
+                    let span = path.span.to(last_span);
+                    Ok(Pattern::Enum { path, tuple, span })
+                } else {
+                    let span = path.span;
+                    match path.into_name() {
+                        Ok(name) => Ok(Pattern::Name {
+                            is_mut: false,
+                            name,
+                            span,
+                        }),
+                        Err(path) => Ok(Pattern::Path { path, span }),
+                    }
                 }
             }
-        } else if self.peek(Mut)? {
-            let first = self.expect(Mut)?;
-            let name = self.name()?;
-            let span = first.span.to(name.span);
-            Ok(Pattern::Name {
-                is_mut: true,
-                name,
-                span,
-            })
-        } else if self.peek(LParen)? {
-            let (tuple, span) = self.tuple_pattern(false)?;
-            Ok(Pattern::Tuple { tuple, span })
-        } else if self.peek(LBrack)? {
-            let first = self.expect(LBrack)?;
-            if self.peek(RBrack)? {
-                let last = self.expect(RBrack)?;
-                let span = first.span.to(last.span);
-                return Ok(Pattern::Array {
-                    array: Vec::new(),
+            Mut => {
+                let first = self.expect(Mut)?;
+                let name = self.name()?;
+                let span = first.span.to(name.span);
+                Ok(Pattern::Name {
+                    is_mut: true,
+                    name,
                     span,
-                });
+                })
             }
-
-            let mut array = vec![self.pattern()?];
-            while !self.peek(RBrack)? && !self.peek([Comma, RBrack])? {
-                self.expect(Comma)?;
-                array.push(self.pattern()?);
+            LParen => {
+                let (tuple, span) = self.tuple_pattern(false)?;
+                Ok(Pattern::Tuple { tuple, span })
             }
-            self.consume(Comma)?;
-            let last = self.expect(RBrack)?;
+            LBrack => {
+                let first = self.expect(LBrack)?;
+                if self.peek(RBrack)? {
+                    let last = self.expect(RBrack)?;
+                    let span = first.span.to(last.span);
+                    return Ok(Pattern::Array {
+                        array: Vec::new(),
+                        span,
+                    });
+                }
 
-            let span = first.span.to(last.span);
-            Ok(Pattern::Array { array, span })
-        } else if self.peek(Int)? {
-            Ok(Pattern::Literal {
-                kind: PatternLiteralKind::Int,
-                span: self.expect(Int)?.span,
-            })
-        } else if self.peek(Char)? {
-            Ok(Pattern::Literal {
-                kind: PatternLiteralKind::Char,
-                span: self.expect(Char)?.span,
-            })
-        } else if self.peek(String)? {
-            Ok(Pattern::Literal {
-                kind: PatternLiteralKind::String,
-                span: self.expect(String)?.span,
-            })
-        } else if self.peek(ByteString)? {
-            Ok(Pattern::Literal {
-                kind: PatternLiteralKind::ByteString,
-                span: self.expect(ByteString)?.span,
-            })
-        } else if self.peek(Byte)? {
-            Ok(Pattern::Literal {
-                kind: PatternLiteralKind::Byte,
-                span: self.expect(Byte)?.span,
-            })
-        } else if self.peek(True)? {
-            Ok(Pattern::Literal {
+                let mut array = vec![self.pattern()?];
+                while !self.peek(RBrack)? && !self.peek([Comma, RBrack])? {
+                    self.expect(Comma)?;
+                    array.push(self.pattern()?);
+                }
+                self.consume(Comma)?;
+                let last = self.expect(RBrack)?;
+
+                let span = first.span.to(last.span);
+                Ok(Pattern::Array { array, span })
+            }
+            Int => literal!(Int),
+            Char => literal!(Char),
+            String => literal!(String),
+            ByteString => literal!(ByteString),
+            Byte => literal!(Byte),
+            True => Ok(Pattern::Literal {
                 kind: PatternLiteralKind::Bool,
                 span: self.expect(True)?.span,
-            })
-        } else if self.peek(False)? {
-            Ok(Pattern::Literal {
+            }),
+            False => Ok(Pattern::Literal {
                 kind: PatternLiteralKind::Bool,
                 span: self.expect(False)?.span,
-            })
-        } else if self.peek(Float)? {
-            Err(Error::new(
+            }),
+            Float => Err(Error::new(
                 "floating-point types cannot be used in patterns",
                 Some(self.peek_span()?),
-            ))
-        } else {
-            Err(Error::new(
-                format!("expected pattern, found {}", self.peek_kind()?.desc()),
+            )),
+            kind => Err(Error::new(
+                format!("expected pattern, found {}", kind.desc()),
                 Some(self.peek_span()?),
-            ))
+            )),
         }
     }
 

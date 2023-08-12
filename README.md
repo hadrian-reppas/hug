@@ -18,7 +18,7 @@
 - [ ] Parse impl params and allow all types in impl blocks
 - [ ] Parse `<Type as Trait>::function` syntax
 - [ ] Allow extern items in stmts
-- [ ] Refactor pattern parsing
+- [x] Refactor pattern parsing
 - [x] Parse `mut self` in signatures
 - [ ] Nuke name resolution
 - [ ] Reimplement name resolution
