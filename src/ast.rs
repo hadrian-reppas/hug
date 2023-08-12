@@ -202,8 +202,8 @@ pub enum UnloadedItem {
     },
     Impl {
         annotations: Vec<Annotation>,
-        path: Path,
         generic_params: Option<GenericParams>,
+        ty: Ty,
         as_trait: Option<TraitBound>,
         where_clause: Option<WhereClause>,
         fns: Vec<ImplFn>,
@@ -326,8 +326,8 @@ pub enum Item {
     },
     Impl {
         annotations: Vec<Annotation>,
-        path: Path,
         generic_params: Option<GenericParams>,
+        ty: Ty,
         as_trait: Option<TraitBound>,
         where_clause: Option<WhereClause>,
         fns: Vec<ImplFn>,
@@ -510,16 +510,16 @@ impl TryFrom<UnloadedItem> for Item {
             }),
             UnloadedItem::Impl {
                 annotations,
-                path,
                 generic_params,
+                ty,
                 as_trait,
                 where_clause,
                 fns,
                 span,
             } => Ok(Item::Impl {
                 annotations,
-                path,
                 generic_params,
+                ty,
                 as_trait,
                 where_clause,
                 fns,

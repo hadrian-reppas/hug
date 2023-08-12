@@ -2426,17 +2426,20 @@ impl<'a> Parser<'a> {
         self.disallow_pub(pub_span, Impl)?;
 
         let first = self.expect(Impl)?;
-        let path = self.path()?;
         let generic_params = if self.peek(Lt)? {
             Some(self.generic_params()?)
         } else {
             None
         };
+
+        let ty = self.ty()?;
+
         let as_trait = if self.consume(As)? {
             Some(self.trait_bound()?)
         } else {
             None
         };
+
         let where_clause = if self.peek(Where)? {
             Some(self.where_clause()?)
         } else {
@@ -2453,8 +2456,8 @@ impl<'a> Parser<'a> {
         let span = first.span.to(last.span);
         Ok(UnloadedItem::Impl {
             annotations,
-            path,
             generic_params,
+            ty,
             as_trait,
             where_clause,
             fns,
