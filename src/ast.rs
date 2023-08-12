@@ -99,14 +99,42 @@ pub struct GenericArgs {
 }
 
 #[derive(Debug)]
+pub struct Annotation {
+    pub item: AnnotationItem,
+    pub span: Span,
+}
+
+#[derive(Debug)]
+pub enum AnnotationItem {
+    String {
+        span: Span,
+    },
+    Name {
+        name: Name,
+        args: Option<Vec<AnnotationItem>>,
+        span: Span,
+    },
+}
+
+impl AnnotationItem {
+    fn span(&self) -> Span {
+        match self {
+            AnnotationItem::String { span } | AnnotationItem::Name { span, .. } => *span,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum UnloadedItem {
     Use {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         has_crate_prefix: bool,
         tree: UseTree,
         span: Span,
     },
     Struct {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         generic_params: Option<GenericParams>,
@@ -114,6 +142,7 @@ pub enum UnloadedItem {
         span: Span,
     },
     Enum {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         generic_params: Option<GenericParams>,
@@ -121,6 +150,7 @@ pub enum UnloadedItem {
         span: Span,
     },
     Type {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         generic_params: Option<GenericParams>,
@@ -128,28 +158,33 @@ pub enum UnloadedItem {
         span: Span,
     },
     Mod {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         span: Span,
     },
     ExternFn {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         signature: Signature,
         span: Span,
     },
     ExternType {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         info: Option<ExternTypeInfo>,
         span: Span,
     },
     ExternStatic {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         ty: Ty,
         span: Span,
     },
     Trait {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         generic_params: Option<GenericParams>,
@@ -159,12 +194,14 @@ pub enum UnloadedItem {
         span: Span,
     },
     Fn {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         signature: Signature,
         block: Block,
         span: Span,
     },
     Impl {
+        annotations: Vec<Annotation>,
         path: Path,
         generic_params: Option<GenericParams>,
         as_trait: Option<TraitBound>,
@@ -173,6 +210,7 @@ pub enum UnloadedItem {
         span: Span,
     },
     Const {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         ty: Ty,
@@ -180,6 +218,7 @@ pub enum UnloadedItem {
         span: Span,
     },
     Static {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         ty: Ty,
@@ -211,12 +250,14 @@ impl UnloadedItem {
 #[derive(Debug)]
 pub enum Item {
     Use {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         has_crate_prefix: bool,
         tree: UseTree,
         span: Span,
     },
     Struct {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         generic_params: Option<GenericParams>,
@@ -224,6 +265,7 @@ pub enum Item {
         span: Span,
     },
     Enum {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         generic_params: Option<GenericParams>,
@@ -231,6 +273,7 @@ pub enum Item {
         span: Span,
     },
     Type {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         generic_params: Option<GenericParams>,
@@ -238,29 +281,34 @@ pub enum Item {
         span: Span,
     },
     Mod {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         span: Span,
         items: Vec<Item>,
     },
     ExternFn {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         signature: Signature,
         span: Span,
     },
     ExternType {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         info: Option<ExternTypeInfo>,
         span: Span,
     },
     ExternStatic {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         ty: Ty,
         span: Span,
     },
     Trait {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         generic_params: Option<GenericParams>,
@@ -270,12 +318,14 @@ pub enum Item {
         span: Span,
     },
     Fn {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         signature: Signature,
         block: Block,
         span: Span,
     },
     Impl {
+        annotations: Vec<Annotation>,
         path: Path,
         generic_params: Option<GenericParams>,
         as_trait: Option<TraitBound>,
@@ -284,6 +334,7 @@ pub enum Item {
         span: Span,
     },
     Const {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         ty: Ty,
@@ -291,6 +342,7 @@ pub enum Item {
         span: Span,
     },
     Static {
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         ty: Ty,
@@ -320,27 +372,31 @@ impl Item {
 }
 
 impl TryFrom<UnloadedItem> for Item {
-    type Error = (bool, Name, Span);
-    fn try_from(item: UnloadedItem) -> Result<Item, (bool, Name, Span)> {
+    type Error = (Vec<Annotation>, bool, Name, Span);
+    fn try_from(item: UnloadedItem) -> Result<Item, Self::Error> {
         match item {
             UnloadedItem::Use {
+                annotations,
                 is_pub,
                 has_crate_prefix,
                 tree,
                 span,
             } => Ok(Item::Use {
+                annotations,
                 is_pub,
                 has_crate_prefix,
                 tree,
                 span,
             }),
             UnloadedItem::Struct {
+                annotations,
                 is_pub,
                 name,
                 generic_params,
                 fields,
                 span,
             } => Ok(Item::Struct {
+                annotations,
                 is_pub,
                 name,
                 generic_params,
@@ -348,12 +404,14 @@ impl TryFrom<UnloadedItem> for Item {
                 span,
             }),
             UnloadedItem::Enum {
+                annotations,
                 is_pub,
                 name,
                 generic_params,
                 items,
                 span,
             } => Ok(Item::Enum {
+                annotations,
                 is_pub,
                 name,
                 generic_params,
@@ -361,51 +419,65 @@ impl TryFrom<UnloadedItem> for Item {
                 span,
             }),
             UnloadedItem::Type {
+                annotations,
                 is_pub,
                 name,
                 generic_params,
                 ty,
                 span,
             } => Ok(Item::Type {
+                annotations,
                 is_pub,
                 name,
                 generic_params,
                 ty,
                 span,
             }),
-            UnloadedItem::Mod { is_pub, name, span } => Err((is_pub, name, span)),
+            UnloadedItem::Mod {
+                annotations,
+                is_pub,
+                name,
+                span,
+            } => Err((annotations, is_pub, name, span)),
             UnloadedItem::ExternFn {
+                annotations,
                 is_pub,
                 signature,
                 span,
             } => Ok(Item::ExternFn {
+                annotations,
                 is_pub,
                 signature,
                 span,
             }),
             UnloadedItem::ExternType {
+                annotations,
                 is_pub,
                 name,
                 info,
                 span,
             } => Ok(Item::ExternType {
+                annotations,
                 is_pub,
                 name,
                 info,
                 span,
             }),
             UnloadedItem::ExternStatic {
+                annotations,
                 is_pub,
                 name,
                 ty,
                 span,
             } => Ok(Item::ExternStatic {
+                annotations,
                 is_pub,
                 name,
                 ty,
                 span,
             }),
             UnloadedItem::Trait {
+                annotations,
                 is_pub,
                 name,
                 generic_params,
@@ -414,6 +486,7 @@ impl TryFrom<UnloadedItem> for Item {
                 items,
                 span,
             } => Ok(Item::Trait {
+                annotations,
                 is_pub,
                 name,
                 generic_params,
@@ -423,17 +496,20 @@ impl TryFrom<UnloadedItem> for Item {
                 span,
             }),
             UnloadedItem::Fn {
+                annotations,
                 is_pub,
                 signature,
                 block,
                 span,
             } => Ok(Item::Fn {
+                annotations,
                 is_pub,
                 signature,
                 block,
                 span,
             }),
             UnloadedItem::Impl {
+                annotations,
                 path,
                 generic_params,
                 as_trait,
@@ -441,6 +517,7 @@ impl TryFrom<UnloadedItem> for Item {
                 fns,
                 span,
             } => Ok(Item::Impl {
+                annotations,
                 path,
                 generic_params,
                 as_trait,
@@ -449,12 +526,14 @@ impl TryFrom<UnloadedItem> for Item {
                 span,
             }),
             UnloadedItem::Const {
+                annotations,
                 is_pub,
                 name,
                 ty,
                 expr,
                 span,
             } => Ok(Item::Const {
+                annotations,
                 is_pub,
                 name,
                 ty,
@@ -462,12 +541,14 @@ impl TryFrom<UnloadedItem> for Item {
                 span,
             }),
             UnloadedItem::Static {
+                annotations,
                 is_pub,
                 name,
                 ty,
                 expr,
                 span,
             } => Ok(Item::Static {
+                annotations,
                 is_pub,
                 name,
                 ty,

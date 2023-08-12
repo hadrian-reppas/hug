@@ -239,6 +239,8 @@ impl<'a> Tokens<'a> {
             token!(Amp)
         } else if self.suffix.starts_with('|') {
             token!(Bar)
+        } else if self.suffix.starts_with('#') {
+            token!(Hash)
         } else if self.suffix.starts_with("//") {
             let mut len = 0;
             for c in self.suffix.chars() {
@@ -531,6 +533,7 @@ pub enum TokenKind {
     Percent,
     Amp,
     Bar,
+    Hash,
 
     // keywords
     And,
@@ -609,6 +612,7 @@ impl TokenKind {
             TokenKind::Percent => "`%`",
             TokenKind::Amp => "`&`",
             TokenKind::Bar => "`|`",
+            TokenKind::Hash => "`#`",
             TokenKind::And => "`and`",
             TokenKind::As => "`as`",
             TokenKind::Break => "`break`",

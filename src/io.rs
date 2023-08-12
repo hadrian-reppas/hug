@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::ast::{Item, Name, UnloadedItem};
+use crate::ast::{Annotation, Item, Name, UnloadedItem};
 use crate::error::Error;
 use crate::parse;
 use crate::span::Span;
@@ -112,8 +112,8 @@ impl FileMap {
         for item in self.parse_std_file(&["lib"])?.0 {
             match Item::try_from(item) {
                 Ok(item) => items.push(item),
-                Err((is_pub, name, span)) => {
-                    items.push(self.handle_std_mod(is_pub, name, span, &[])?)
+                Err((annotations, is_pub, name, span)) => {
+                    items.push(self.handle_std_mod(annotations, is_pub, name, span, &[])?)
                 }
             }
         }
@@ -130,9 +130,14 @@ impl FileMap {
         for item in unloaded_items {
             match Item::try_from(item) {
                 Ok(item) => items.push(item),
-                Err((is_pub, name, span)) => {
-                    items.push(self.handle_mod(is_pub, name, span, &prefix, crate_name.clone())?)
-                }
+                Err((annotations, is_pub, name, span)) => items.push(self.handle_mod(
+                    annotations,
+                    is_pub,
+                    name,
+                    span,
+                    &prefix,
+                    crate_name.clone(),
+                )?),
             }
         }
         Ok(items)
@@ -140,6 +145,7 @@ impl FileMap {
 
     fn handle_mod(
         &mut self,
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         span: Span,
@@ -170,7 +176,7 @@ impl FileMap {
             for item in self.parse(file_path, crate_name)? {
                 match Item::try_from(item) {
                     Ok(item) => file_items.push(item),
-                    Err((_, _, span)) => {
+                    Err((_, _, _, span)) => {
                         return Err(Error::new(
                             "mod items are only allowed in the main file and \"mod.hug\" files",
                             Some(span),
@@ -179,6 +185,7 @@ impl FileMap {
                 }
             }
             Ok(Item::Mod {
+                annotations,
                 is_pub,
                 name,
                 items: file_items,
@@ -189,6 +196,7 @@ impl FileMap {
             mod_path.pop();
             let mod_items = self.collect(unloaded_items, mod_path, crate_name)?;
             Ok(Item::Mod {
+                annotations,
                 is_pub,
                 name,
                 items: mod_items,
@@ -211,6 +219,7 @@ impl FileMap {
 
     fn handle_std_mod(
         &mut self,
+        annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
         span: Span,
@@ -224,9 +233,9 @@ impl FileMap {
         for unloaded_item in unloaded_items {
             match Item::try_from(unloaded_item) {
                 Ok(item) => items.push(item),
-                Err((is_pub, name, span)) => {
+                Err((annotations, is_pub, name, span)) => {
                     if is_mod {
-                        items.push(self.handle_std_mod(is_pub, name, span, &path)?)
+                        items.push(self.handle_std_mod(annotations, is_pub, name, span, &path)?)
                     } else {
                         return Err(Error::new(
                             "mod items are only allowed in the main file and \"mod.hug\" files",
@@ -238,6 +247,7 @@ impl FileMap {
         }
 
         Ok(Item::Mod {
+            annotations,
             is_pub,
             name,
             items,

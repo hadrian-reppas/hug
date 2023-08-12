@@ -92,6 +92,11 @@ impl<'a> Parser<'a> {
     }
 
     fn item(&mut self) -> Result<UnloadedItem, Error> {
+        let mut annotations = Vec::new();
+        while self.peek(Hash)? {
+            annotations.push(self.annotation()?);
+        }
+
         let pub_span = if self.peek(Pub)? {
             Some(self.next()?.span)
         } else {
@@ -99,21 +104,68 @@ impl<'a> Parser<'a> {
         };
 
         match self.peek_kind()? {
-            Fn => self.fn_def(pub_span),
-            Struct => self.struct_def(pub_span),
-            Enum => self.enum_def(pub_span),
-            Impl => self.impl_block(pub_span),
-            Type => self.type_alias(pub_span),
-            Trait => self.trait_def(pub_span),
-            Const => self.const_def(pub_span),
-            Static => self.static_decl(pub_span),
-            Use => self.use_decl(pub_span),
-            Mod => self.module(pub_span),
-            Extern => self.extern_item(pub_span),
+            Fn => self.fn_def(annotations, pub_span),
+            Struct => self.struct_def(annotations, pub_span),
+            Enum => self.enum_def(annotations, pub_span),
+            Impl => self.impl_block(annotations, pub_span),
+            Type => self.type_alias(annotations, pub_span),
+            Trait => self.trait_def(annotations, pub_span),
+            Const => self.const_def(annotations, pub_span),
+            Static => self.static_decl(annotations, pub_span),
+            Use => self.use_decl(annotations, pub_span),
+            Mod => self.module(annotations, pub_span),
+            Extern => self.extern_item(annotations, pub_span),
             kind => Err(Error::new(
                 format!("expected item, found {}", kind.desc()),
                 Some(self.peek_span()?),
             )),
+        }
+    }
+
+    fn annotation(&mut self) -> Result<Annotation, Error> {
+        let first = self.expect(Hash)?;
+        self.expect(LBrack)?;
+        let item = self.annotation_item()?;
+        let last = self.expect(RBrack)?;
+
+        let span = first.span.to(last.span);
+        Ok(Annotation { item, span })
+    }
+
+    fn annotation_item(&mut self) -> Result<AnnotationItem, Error> {
+        if self.peek(String)? {
+            let span = self.expect(String)?.span;
+            Ok(AnnotationItem::String { span })
+        } else if self.peek(Ident)? {
+            let name = self.name()?;
+
+            let (args, span) = if self.consume(LParen)? {
+                if self.peek(RParen)? {
+                    let last = self.expect(RParen)?;
+                    (Some(Vec::new()), name.span.to(last.span))
+                } else {
+                    let mut args = vec![self.annotation_item()?];
+                    while !self.peek(RParen)? && !self.peek([Comma, RParen])? {
+                        self.expect(Comma)?;
+                        args.push(self.annotation_item()?);
+                    }
+                    self.consume(Comma)?;
+                    let last = self.expect(RParen)?;
+                    (Some(args), name.span.to(last.span))
+                }
+            } else {
+                (None, name.span)
+            };
+
+            Ok(AnnotationItem::Name { name, args, span })
+        } else {
+            Err(Error::new(
+                format!(
+                    "expected annotation item, found {}",
+                    self.peek_kind()?.desc()
+                ),
+                Some(self.peek_span()?),
+            ))
         }
     }
 
@@ -281,7 +333,11 @@ impl<'a> Parser<'a> {
         Ok(GenericArgs { args, span })
     }
 
-    fn use_decl(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
+    fn use_decl(
+        &mut self,
+        annotations: Vec<Annotation>,
+        pub_span: Option<Span>,
+    ) -> Result<UnloadedItem, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Use)?;
 
         let has_crate_prefix = self.consume(Crate)?;
@@ -293,6 +349,7 @@ impl<'a> Parser<'a> {
         let tree = self.use_tree()?;
         let last = self.expect(Semi)?;
         Ok(UnloadedItem::Use {
+            annotations,
             is_pub,
             has_crate_prefix,
             tree,
@@ -344,7 +401,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn struct_def(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
+    fn struct_def(
+        &mut self,
+        annotations: Vec<Annotation>,
+        pub_span: Option<Span>,
+    ) -> Result<UnloadedItem, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Struct)?;
 
         let name = self.name()?;
@@ -360,6 +421,7 @@ impl<'a> Parser<'a> {
             let last = self.expect(RBrace)?;
             let span = first_span.to(last.span);
             return Ok(UnloadedItem::Struct {
+                annotations,
                 is_pub,
                 name,
                 generic_params,
@@ -378,6 +440,7 @@ impl<'a> Parser<'a> {
 
         let span = first_span.to(last.span);
         Ok(UnloadedItem::Struct {
+            annotations,
             is_pub,
             name,
             generic_params,
@@ -439,7 +502,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn enum_def(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
+    fn enum_def(
+        &mut self,
+        annotations: Vec<Annotation>,
+        pub_span: Option<Span>,
+    ) -> Result<UnloadedItem, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Enum)?;
 
         let name = self.name()?;
@@ -455,6 +522,7 @@ impl<'a> Parser<'a> {
             let last = self.expect(RBrace)?;
             let span = first_span.to(last.span);
             return Ok(UnloadedItem::Enum {
+                annotations,
                 is_pub,
                 name,
                 generic_params,
@@ -473,6 +541,7 @@ impl<'a> Parser<'a> {
 
         let span = first_span.to(last.span);
         Ok(UnloadedItem::Enum {
+            annotations,
             is_pub,
             name,
             generic_params,
@@ -519,7 +588,11 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn type_alias(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
+    fn type_alias(
+        &mut self,
+        annotations: Vec<Annotation>,
+        pub_span: Option<Span>,
+    ) -> Result<UnloadedItem, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Type)?;
 
         let name = self.name()?;
@@ -535,6 +608,7 @@ impl<'a> Parser<'a> {
 
         let span = first_span.to(last.span);
         Ok(UnloadedItem::Type {
+            annotations,
             is_pub,
             name,
             generic_params,
@@ -543,16 +617,29 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn module(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
+    fn module(
+        &mut self,
+        annotations: Vec<Annotation>,
+        pub_span: Option<Span>,
+    ) -> Result<UnloadedItem, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Mod)?;
         let name = self.name()?;
         let last = self.expect(Semi)?;
 
         let span = first_span.to(last.span);
-        Ok(UnloadedItem::Mod { is_pub, name, span })
+        Ok(UnloadedItem::Mod {
+            annotations,
+            is_pub,
+            name,
+            span,
+        })
     }
 
-    fn trait_def(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
+    fn trait_def(
+        &mut self,
+        annotations: Vec<Annotation>,
+        pub_span: Option<Span>,
+    ) -> Result<UnloadedItem, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Trait)?;
 
         let name = self.name()?;
@@ -588,6 +675,7 @@ impl<'a> Parser<'a> {
 
         let span = first_span.to(last.span);
         Ok(UnloadedItem::Trait {
+            annotations,
             is_pub,
             name,
             generic_params,
@@ -1746,7 +1834,11 @@ impl<'a> Parser<'a> {
         Ok(Label { name, span })
     }
 
-    fn extern_item(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
+    fn extern_item(
+        &mut self,
+        annotations: Vec<Annotation>,
+        pub_span: Option<Span>,
+    ) -> Result<UnloadedItem, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Extern)?;
 
         match self.peek_kind()? {
@@ -1755,6 +1847,7 @@ impl<'a> Parser<'a> {
                 let last = self.expect(Semi)?.span;
                 let span = first_span.to(last);
                 Ok(UnloadedItem::ExternFn {
+                    annotations,
                     is_pub,
                     signature,
                     span,
@@ -1784,6 +1877,7 @@ impl<'a> Parser<'a> {
 
                 let span = first_span.to(last.span);
                 Ok(UnloadedItem::ExternType {
+                    annotations,
                     is_pub,
                     name,
                     info,
@@ -1799,6 +1893,7 @@ impl<'a> Parser<'a> {
 
                 let span = first_span.to(last.span);
                 Ok(UnloadedItem::ExternStatic {
+                    annotations,
                     is_pub,
                     name,
                     ty,
@@ -2276,7 +2371,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn fn_def(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
+    fn fn_def(
+        &mut self,
+        annotations: Vec<Annotation>,
+        pub_span: Option<Span>,
+    ) -> Result<UnloadedItem, Error> {
         let signature = self.signature()?;
         let block = self.block()?;
 
@@ -2286,6 +2385,7 @@ impl<'a> Parser<'a> {
             (signature.span.to(block.span), false)
         };
         Ok(UnloadedItem::Fn {
+            annotations,
             is_pub,
             signature,
             block,
@@ -2293,7 +2393,11 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn impl_block(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
+    fn impl_block(
+        &mut self,
+        annotations: Vec<Annotation>,
+        pub_span: Option<Span>,
+    ) -> Result<UnloadedItem, Error> {
         self.disallow_pub(pub_span, Impl)?;
 
         let first = self.expect(Impl)?;
@@ -2323,6 +2427,7 @@ impl<'a> Parser<'a> {
 
         let span = first.span.to(last.span);
         Ok(UnloadedItem::Impl {
+            annotations,
             path,
             generic_params,
             as_trait,
@@ -2356,7 +2461,11 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn const_def(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
+    fn const_def(
+        &mut self,
+        annotations: Vec<Annotation>,
+        pub_span: Option<Span>,
+    ) -> Result<UnloadedItem, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Const)?;
         let name = self.name()?;
         self.expect(Colon)?;
@@ -2367,6 +2476,7 @@ impl<'a> Parser<'a> {
 
         let span = first_span.to(last.span);
         Ok(UnloadedItem::Const {
+            annotations,
             is_pub,
             name,
             ty,
@@ -2375,7 +2485,11 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn static_decl(&mut self, pub_span: Option<Span>) -> Result<UnloadedItem, Error> {
+    fn static_decl(
+        &mut self,
+        annotations: Vec<Annotation>,
+        pub_span: Option<Span>,
+    ) -> Result<UnloadedItem, Error> {
         let (first_span, is_pub) = self.handle_pub(pub_span, Static)?;
         let name = self.name()?;
         self.expect(Colon)?;
@@ -2389,6 +2503,7 @@ impl<'a> Parser<'a> {
 
         let span = first_span.to(last.span);
         Ok(UnloadedItem::Static {
+            annotations,
             is_pub,
             name,
             ty,
@@ -2486,7 +2601,7 @@ impl Sequence for TokenKind {
         block! {
             Ident, Under, Int, Float, Char, String, ByteString, Byte, Semi, Comma, Dot, LParen,
             RParen, LBrace, RBrace, LBrack, RBrack, At, Tilde, QMark, Colon, Eq, Bang, Lt, Gt,
-            Dash, Plus, Star, Slash, Caret, Percent, Amp, Bar, And, As, Break, Const, Continue,
+            Dash, Plus, Star, Slash, Caret, Percent, Amp, Bar, Hash, And, As, Break, Const, Continue,
             Crate, Else, Enum, Extern, False, Fn, For, Goto, If, Impl, In, Let, Loop, Match, Mod,
             Mut, Not, Or, Pub, Return, SelfType, SelfValue, Static, Struct, Trait, Try, True,
             Type, Use, Where, While, Eof,
