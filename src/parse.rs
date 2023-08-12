@@ -86,17 +86,13 @@ impl<'a> Parser<'a> {
     fn items(&mut self) -> Result<Vec<UnloadedItem>, Error> {
         let mut items = Vec::new();
         while !self.peek(Eof)? {
-            items.push(self.item()?);
+            let annotations = self.annotations()?;
+            items.push(self.item(annotations)?);
         }
         Ok(items)
     }
 
-    fn item(&mut self) -> Result<UnloadedItem, Error> {
-        let mut annotations = Vec::new();
-        while self.peek(Hash)? {
-            annotations.push(self.annotation()?);
-        }
-
+    fn item(&mut self, annotations: Vec<Annotation>) -> Result<UnloadedItem, Error> {
         let pub_span = if self.peek(Pub)? {
             Some(self.next()?.span)
         } else {
@@ -120,6 +116,14 @@ impl<'a> Parser<'a> {
                 Some(self.peek_span()?),
             )),
         }
+    }
+
+    fn annotations(&mut self) -> Result<Vec<Annotation>, Error> {
+        let mut annotations = Vec::new();
+        while self.peek(Hash)? {
+            annotations.push(self.annotation()?);
+        }
+        Ok(annotations)
     }
 
     fn annotation(&mut self) -> Result<Annotation, Error> {
@@ -474,14 +478,16 @@ impl<'a> Parser<'a> {
     }
 
     fn struct_field(&mut self) -> Result<StructField, Error> {
+        let annotations = self.annotations()?;
         if self.peek(Pub)? {
-            let pub_span = self.expect(Pub)?.span;
+            let first = self.expect(Pub)?;
             let name = self.name()?;
             self.expect(Colon)?;
             let ty = self.ty()?;
 
-            let span = pub_span.to(ty.span());
+            let span = first.span.to(ty.span());
             Ok(StructField {
+                annotations,
                 is_pub: true,
                 name,
                 ty,
@@ -494,6 +500,7 @@ impl<'a> Parser<'a> {
 
             let span = name.span.to(ty.span());
             Ok(StructField {
+                annotations,
                 is_pub: false,
                 name,
                 ty,
@@ -551,11 +558,13 @@ impl<'a> Parser<'a> {
     }
 
     fn enum_item(&mut self) -> Result<EnumItem, Error> {
+        let annotations = self.annotations()?;
         let name = self.name()?;
 
         if !self.consume(LParen)? {
             let span = name.span;
             return Ok(EnumItem {
+                annotations,
                 name,
                 tuple: None,
                 span,
@@ -566,6 +575,7 @@ impl<'a> Parser<'a> {
             let last = self.expect(RParen)?;
             let span = name.span.to(last.span);
             return Ok(EnumItem {
+                annotations,
                 name,
                 tuple: Some(Vec::new()),
                 span,
@@ -582,6 +592,7 @@ impl<'a> Parser<'a> {
 
         let span = name.span.to(last.span);
         Ok(EnumItem {
+            annotations,
             name,
             tuple: Some(tuple),
             span,
@@ -801,10 +812,11 @@ impl<'a> Parser<'a> {
         let first = self.expect(LBrace)?;
         let mut stmts = Vec::new();
         while !self.peek(RBrace)? {
+            let annotations = self.annotations()?;
             match self.peek_kind()? {
-                Let => stmts.push(self.local()?),
+                Let => stmts.push(self.local(annotations)?),
                 Use | Struct | Enum | Type | Fn | Const | Static => {
-                    stmts.push(self.item()?.try_into().unwrap())
+                    stmts.push(self.item(annotations)?.try_into().unwrap())
                 }
                 Semi => {
                     self.expect(Semi)?;
@@ -814,8 +826,20 @@ impl<'a> Parser<'a> {
                     if self.peek(Semi)? {
                         let last = self.expect(Semi)?;
                         let span = expr.span().to(last.span);
-                        stmts.push(Stmt::Expr { expr, span });
+                        stmts.push(Stmt::Expr {
+                            annotations,
+                            expr,
+                            span,
+                        });
                     } else if self.peek(RBrace)? {
+                        if let (Some(first), Some(last)) = (annotations.get(0), annotations.last())
+                        {
+                            return Err(Error::new(
+                                "annotations are not allowed before the final expression",
+                                Some(first.span.to(last.span)),
+                            ));
+                        }
+
                         let last = self.expect(RBrace)?;
                         let span = first.span.to(last.span);
                         return Ok(Block {
@@ -825,7 +849,11 @@ impl<'a> Parser<'a> {
                         });
                     } else if expr.has_block() {
                         let span = expr.span();
-                        stmts.push(Stmt::Expr { expr, span });
+                        stmts.push(Stmt::Expr {
+                            annotations,
+                            expr,
+                            span,
+                        });
                     } else {
                         return Err(Error::new(
                             format!(
@@ -850,7 +878,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn local(&mut self) -> Result<Stmt, Error> {
+    fn local(&mut self, annotations: Vec<Annotation>) -> Result<Stmt, Error> {
         let first = self.expect(Let)?;
         let pattern = self.pattern()?;
 
@@ -869,6 +897,7 @@ impl<'a> Parser<'a> {
         let last = self.expect(Semi)?;
         let span = first.span.to(last.span);
         Ok(Stmt::Local {
+            annotations,
             pattern,
             ty,
             expr,
@@ -2438,6 +2467,7 @@ impl<'a> Parser<'a> {
     }
 
     fn impl_fn(&mut self) -> Result<ImplFn, Error> {
+        let annotations = self.annotations()?;
         let pub_span = if self.peek(Pub)? {
             Some(self.next()?.span)
         } else {
@@ -2454,6 +2484,7 @@ impl<'a> Parser<'a> {
         };
 
         Ok(ImplFn {
+            annotations,
             is_pub,
             signature,
             block,

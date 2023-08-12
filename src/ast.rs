@@ -575,6 +575,7 @@ pub enum UseTreeKind {
 
 #[derive(Debug)]
 pub struct StructField {
+    pub annotations: Vec<Annotation>,
     pub is_pub: bool,
     pub name: Name,
     pub ty: Ty,
@@ -583,6 +584,7 @@ pub struct StructField {
 
 #[derive(Debug)]
 pub struct EnumItem {
+    pub annotations: Vec<Annotation>,
     pub name: Name,
     pub tuple: Option<Vec<Ty>>,
     pub span: Span,
@@ -743,50 +745,59 @@ pub struct Block {
 #[derive(Debug)]
 pub enum Stmt {
     Local {
+        annotations: Vec<Annotation>,
         pattern: Pattern,
         ty: Option<Ty>,
         expr: Option<Expr>,
         span: Span,
     },
     Expr {
+        annotations: Vec<Annotation>,
         expr: Expr,
         span: Span,
     },
     Use {
+        annotations: Vec<Annotation>,
         has_crate_prefix: bool,
         tree: UseTree,
         span: Span,
     },
     Struct {
+        annotations: Vec<Annotation>,
         name: Name,
         generic_params: Option<GenericParams>,
         fields: Vec<StructField>,
         span: Span,
     },
     Type {
+        annotations: Vec<Annotation>,
         name: Name,
         generic_params: Option<GenericParams>,
         ty: Ty,
         span: Span,
     },
     Enum {
+        annotations: Vec<Annotation>,
         name: Name,
         generic_params: Option<GenericParams>,
         items: Vec<EnumItem>,
         span: Span,
     },
     Fn {
+        annotations: Vec<Annotation>,
         signature: Signature,
         block: Block,
         span: Span,
     },
     Const {
+        annotations: Vec<Annotation>,
         name: Name,
         ty: Ty,
         expr: Expr,
         span: Span,
     },
     Static {
+        annotations: Vec<Annotation>,
         name: Name,
         ty: Ty,
         expr: Option<Expr>,
@@ -815,80 +826,94 @@ impl TryFrom<UnloadedItem> for Stmt {
     fn try_from(item: UnloadedItem) -> Result<Stmt, ()> {
         match item {
             UnloadedItem::Use {
+                annotations,
                 has_crate_prefix,
                 tree,
                 span,
                 ..
             } => Ok(Stmt::Use {
+                annotations,
                 has_crate_prefix,
                 tree,
                 span,
             }),
             UnloadedItem::Struct {
+                annotations,
                 name,
                 generic_params,
                 fields,
                 span,
                 ..
             } => Ok(Stmt::Struct {
+                annotations,
                 name,
                 generic_params,
                 fields,
                 span,
             }),
             UnloadedItem::Enum {
+                annotations,
                 name,
                 generic_params,
                 items,
                 span,
                 ..
             } => Ok(Stmt::Enum {
+                annotations,
                 name,
                 generic_params,
                 items,
                 span,
             }),
             UnloadedItem::Type {
+                annotations,
                 name,
                 generic_params,
                 ty,
                 span,
                 ..
             } => Ok(Stmt::Type {
+                annotations,
                 name,
                 generic_params,
                 ty,
                 span,
             }),
             UnloadedItem::Fn {
+                annotations,
                 signature,
                 block,
                 span,
                 ..
             } => Ok(Stmt::Fn {
+                annotations,
                 signature,
                 block,
                 span,
             }),
             UnloadedItem::Const {
+                annotations,
                 name,
                 ty,
                 expr,
                 span,
                 ..
             } => Ok(Stmt::Const {
+                annotations,
                 name,
                 ty,
                 expr,
                 span,
             }),
             UnloadedItem::Static {
+                annotations,
                 name,
                 ty,
                 expr,
                 span,
                 ..
             } => Ok(Stmt::Static {
+                annotations,
                 name,
                 ty,
                 expr,
@@ -1403,6 +1428,7 @@ impl FieldPattern {
 
 #[derive(Debug)]
 pub struct ImplFn {
+    pub annotations: Vec<Annotation>,
     pub is_pub: bool,
     pub signature: Signature,
     pub block: Block,
