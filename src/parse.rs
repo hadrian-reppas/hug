@@ -944,7 +944,17 @@ impl<'a> Parser<'a> {
             Bang => uop!(Bang, Not, Prefix),
             Not => uop!(Not, LogicalNot, Prefix),
             Star => uop!(Star, Deref, Prefix),
-            Amp => uop!(Amp, AddrOf, Prefix),
+            Amp => {
+                let first = self.expect(Amp)?;
+                let is_mut = self.consume(Mut)?;
+                let expr = self.expr(BindingPower::Prefix, allow_struct)?;
+                let span = first.span.to(expr.span());
+                Expr::AddrOf {
+                    is_mut,
+                    expr: Box::new(expr),
+                    span,
+                }
+            }
 
             Ident | Crate => self.ident_expr(allow_struct)?,
             SelfValue => Expr::SelfValue {

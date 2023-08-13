@@ -1019,6 +1019,11 @@ pub enum Expr {
         op_span: Span,
         span: Span,
     },
+    AddrOf {
+        is_mut: bool,
+        expr: Box<Expr>,
+        span: Span,
+    },
     Literal {
         kind: LiteralKind,
         span: Span,
@@ -1172,6 +1177,7 @@ impl Expr {
             | Expr::Tuple { span, .. }
             | Expr::Binary { span, .. }
             | Expr::Unary { span, .. }
+            | Expr::AddrOf { span, .. }
             | Expr::Literal { span, .. }
             | Expr::SelfValue { span, .. }
             | Expr::Cast { span, .. }
@@ -1320,7 +1326,6 @@ pub enum UnOp {
     Not,
     LogicalNot,
     Neg,
-    AddrOf,
 }
 
 #[derive(Debug)]

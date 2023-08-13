@@ -20,6 +20,7 @@
 - [x] Allow extern items in stmts
 - [x] Refactor pattern parsing
 - [x] Parse `mut self` in signatures
+- [x] Parse `&mut`
 - [ ] Keep track of `CrateId`s
 - [ ] Refactor spans
 - [ ] Add multiline comments
