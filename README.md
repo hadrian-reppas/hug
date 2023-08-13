@@ -25,8 +25,8 @@
 - [x] Refactor spans
 - [x] Disallow spaces in `::`
 - [x] Add multiline comments
-- [ ] Allow arbitrary types in where items
-- [ ] Come up with new syntax for functional dependencies
+- [x] Allow arbitrary types in where items
+- [x] Come up with new syntax for functional dependencies
 - [ ] Nuke name resolution
 - [ ] Implement fixpoint `use` resolution
 - [ ] Figure out how to deal with type aliases

@@ -657,7 +657,7 @@ pub struct WhereClause {
 
 #[derive(Debug)]
 pub struct WhereItem {
-    pub param: Name,
+    pub ty: Ty,
     pub bounds: Vec<TraitBound>,
     pub span: Span,
 }
@@ -671,7 +671,7 @@ pub struct TraitWhereClause {
 #[derive(Debug)]
 pub enum TraitWhereItem {
     Bound {
-        param: Name,
+        ty: Ty,
         bounds: Vec<TraitBound>,
         span: Span,
     },
