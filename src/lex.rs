@@ -252,6 +252,28 @@ impl<'a> Tokens<'a> {
             }
             self.make_span(len);
             self.next()
+        } else if self.suffix.starts_with("/*") {
+            let mut depth = 1;
+            let mut len = 2;
+            while depth > 0 && !self.suffix[len..].is_empty() {
+                if self.suffix[len..].starts_with("/*") {
+                    depth += 1;
+                    len += 2;
+                } else if self.suffix[len..].starts_with("*/") {
+                    depth -= 1;
+                    len += 2;
+                } else {
+                    let c = self.suffix[len..].chars().next().unwrap();
+                    len += c.len_utf8();
+                }
+            }
+            if depth == 0 {
+                self.make_span(len);
+                self.next()
+            } else {
+                let span = self.make_span(2);
+                Err(Error::new("unterminated block comment", Some(span)))
+            }
         } else if self.suffix.starts_with('/') {
             token!(Slash)
         } else if self.suffix.starts_with('\'') {
