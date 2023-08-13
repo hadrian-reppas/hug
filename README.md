@@ -23,6 +23,7 @@
 - [x] Parse `&mut`
 - [x] Keep track of `CrateId`s
 - [x] Refactor spans
+- [x] Disallow spaces in `::`
 - [ ] Add multiline comments
 - [ ] Allow arbitrary types in where items
 - [ ] Come up with new syntax for functional dependencies

@@ -346,8 +346,9 @@ impl<'a> Parser<'a> {
 
         let has_crate_prefix = self.consume(Crate)?;
         if has_crate_prefix {
-            self.expect(Colon)?;
-            self.expect(Colon)?;
+            let one = self.expect(Colon)?;
+            let two = self.expect(Colon)?;
+            one.span.by(two.span, self.tokens.code())?;
         }
 
         let tree = self.use_tree()?;
@@ -363,7 +364,12 @@ impl<'a> Parser<'a> {
 
     fn use_tree(&mut self) -> Result<UseTree, Error> {
         let prefix = self.pure_path()?;
-        if self.consume([Colon, Colon, LBrace])? {
+        if self.peek([Colon, Colon, LBrace])? {
+            let one = self.expect(Colon)?;
+            let two = self.expect(Colon)?;
+            one.span.by(two.span, self.tokens.code())?;
+            self.expect(LBrace)?;
+
             if self.peek(RBrace)? {
                 let last = self.expect(RBrace)?;
                 let span = prefix.span.to(last.span);
@@ -1605,8 +1611,10 @@ impl<'a> Parser<'a> {
             None
         };
         self.expect(Gt)?;
-        self.expect(Colon)?;
-        self.expect(Colon)?;
+        let one = self.expect(Colon)?;
+        let two = self.expect(Colon)?;
+        one.span.by(two.span, self.tokens.code())?;
+
         let segment = self.generic_segment()?;
 
         let span = first.span.to(segment.span);
@@ -1695,15 +1703,16 @@ impl<'a> Parser<'a> {
     fn generic_path(&mut self) -> Result<GenericPath, Error> {
         let has_crate_prefix = self.consume(Crate)?;
         if has_crate_prefix {
-            self.expect(Colon)?;
-            self.expect(Colon)?;
+            let one = self.expect(Colon)?;
+            let two = self.expect(Colon)?;
+            one.span.by(two.span, self.tokens.code())?;
         }
 
         let mut segments = vec![self.generic_segment()?];
         while self.peek([Colon, Colon, Ident])? {
-            let first_colon = self.expect(Colon)?;
-            let last_colon = self.expect(Colon)?;
-            first_colon.span.by(last_colon.span, self.tokens.code())?;
+            let one = self.expect(Colon)?;
+            let two = self.expect(Colon)?;
+            one.span.by(two.span, self.tokens.code())?;
             segments.push(self.generic_segment()?);
         }
 
@@ -1718,9 +1727,9 @@ impl<'a> Parser<'a> {
     fn generic_segment(&mut self) -> Result<GenericSegment, Error> {
         let name = self.name()?;
         if self.peek([Colon, Colon, Lt])? {
-            let first_colon = self.expect(Colon)?;
-            let last_colon = self.expect(Colon)?;
-            first_colon.span.by(last_colon.span, self.tokens.code())?;
+            let one = self.expect(Colon)?;
+            let two = self.expect(Colon)?;
+            one.span.by(two.span, self.tokens.code())?;
             let generic_args = self.generic_args()?;
 
             let span = name.span.to(generic_args.span);
@@ -2615,14 +2624,16 @@ impl<'a> Parser<'a> {
     fn path(&mut self) -> Result<Path, Error> {
         let has_crate_prefix = self.consume(Crate)?;
         if has_crate_prefix {
-            self.expect(Colon)?;
-            self.expect(Colon)?;
+            let one = self.expect(Colon)?;
+            let two = self.expect(Colon)?;
+            one.span.by(two.span, self.tokens.code())?;
         }
 
         let mut path = vec![self.name()?];
         while self.peek([Colon, Colon, Ident])? {
-            self.expect(Colon)?;
-            self.expect(Colon)?;
+            let one = self.expect(Colon)?;
+            let two = self.expect(Colon)?;
+            one.span.by(two.span, self.tokens.code())?;
             path.push(self.name()?);
         }
         let span = path[0].span.to(path.last().unwrap().span);
@@ -2636,8 +2647,9 @@ impl<'a> Parser<'a> {
     fn pure_path(&mut self) -> Result<PurePath, Error> {
         let mut path = vec![self.name()?];
         while self.peek([Colon, Colon, Ident])? {
-            self.expect(Colon)?;
-            self.expect(Colon)?;
+            let one = self.expect(Colon)?;
+            let two = self.expect(Colon)?;
+            one.span.by(two.span, self.tokens.code())?;
             path.push(self.name()?);
         }
         let span = path[0].span.to(path.last().unwrap().span);
