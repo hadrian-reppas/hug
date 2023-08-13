@@ -3,7 +3,7 @@ use std::fmt::{self, Debug};
 use std::io::{self, Write};
 
 use crate::error::Error;
-use crate::io::{FileId, FileMap};
+use crate::io::{CrateId, FileId, FileMap};
 
 const MAX_LINES: usize = 4;
 
@@ -41,7 +41,10 @@ macro_rules! reset {
 pub struct Span {
     pub start: usize,
     pub end: usize,
-    pub location: Location,
+    pub line: usize,
+    pub column: usize,
+    pub file_id: FileId,
+    pub crate_id: CrateId,
 }
 
 impl Span {
@@ -79,11 +82,10 @@ impl Span {
         Span {
             start: 0,
             end: 0,
-            location: Location {
-                line: 0,
-                column: 0,
-                file_id: FileId::first(),
-            },
+            line: 0,
+            column: 0,
+            file_id: FileId::first(),
+            crate_id: CrateId::std_id(),
         }
     }
 
@@ -97,7 +99,7 @@ impl Span {
     }
 
     pub fn write<W: Write>(self, out: &mut W, color: bool, map: &FileMap) -> io::Result<()> {
-        let code = map.get_code(self.location.file_id);
+        let code = map.get_code(self.file_id);
         if code[self.start..self.end].contains('\n') {
             self.write_multiline(out, color, map)
         } else {
@@ -106,13 +108,13 @@ impl Span {
     }
 
     fn write_multiline<W: Write>(self, out: &mut W, color: bool, map: &FileMap) -> io::Result<()> {
-        let code = map.get_code(self.location.file_id);
+        let code = map.get_code(self.file_id);
 
         let mut lines: Vec<_> = map
             .text_at(self)
             .lines()
             .enumerate()
-            .map(|(i, line)| (self.location.line + i + 1, line))
+            .map(|(i, line)| (self.line + i + 1, line))
             .collect();
         let mut prefix = get_prefix(code, lines[0].1);
         let suffix = get_suffix(code, lines.last().unwrap().1);
@@ -127,7 +129,7 @@ impl Span {
                 .unwrap(),
         );
 
-        let last_line_num = format!("{}", self.location.line + lines.len());
+        let last_line_num = format!("{}", self.line + lines.len());
         let num_width = last_line_num.len();
         let space = " ".repeat(num_width);
 
@@ -149,14 +151,14 @@ impl Span {
         let last_len = lines.last().unwrap().1.len();
 
         write!(out, "{}{}-->{} ", space, color!(Blue, color), reset!(color))?;
-        self.location.write(out, map)?;
+        self.write_location(out, map)?;
         writeln!(out, "\n{} {}|{}", space, color!(Blue, color), reset!(color))?;
         if prefix.trim().is_empty() {
             writeln!(
                 out,
                 "{}{:>num_width$} |{} {}/{} {}{}",
                 color!(Blue, color),
-                self.location.line + 1,
+                self.line + 1,
                 reset!(color),
                 color!(Red, color),
                 reset!(color),
@@ -168,7 +170,7 @@ impl Span {
                 out,
                 "{}{:>num_width$} |{}   {}{}",
                 color!(Blue, color),
-                self.location.line + 1,
+                self.line + 1,
                 reset!(color),
                 prefix,
                 lines[0].1
@@ -237,7 +239,7 @@ impl Span {
 
     fn write_simple<W: Write>(self, out: &mut W, color: bool, map: &FileMap) -> io::Result<()> {
         let text = map.text_at(self);
-        let code = map.get_code(self.location.file_id);
+        let code = map.get_code(self.file_id);
 
         let mut prefix = get_prefix(code, text);
         let suffix = get_suffix(code, text);
@@ -248,11 +250,11 @@ impl Span {
             prefix = &prefix[offset..];
         }
 
-        let line_num = format!("{}", self.location.line + 1);
+        let line_num = format!("{}", self.line + 1);
         let space = " ".repeat(line_num.len());
 
         write!(out, "{}{}-->{} ", space, color!(Blue, color), reset!(color))?;
-        self.location.write(out, map)?;
+        self.write_location(out, map)?;
         writeln!(out, "\n{} {}|{}", space, color!(Blue, color), reset!(color))?;
         writeln!(
             out,
@@ -274,6 +276,17 @@ impl Span {
             color!(Red, color),
             "^".repeat(cmp::max(text.chars().count(), 1)),
             reset!(color)
+        )
+    }
+
+    fn write_location<W: Write>(self, out: &mut W, map: &FileMap) -> io::Result<()> {
+        let path = map.get_path(self.file_id);
+        write!(
+            out,
+            "{}:{}:{}",
+            path.as_os_str().to_str().unwrap(),
+            self.line + 1,
+            self.column + 1
         )
     }
 }
@@ -307,25 +320,5 @@ fn count_leading_spaces(s: &str) -> usize {
 impl Debug for Span {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Span")
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Location {
-    pub line: usize,
-    pub column: usize,
-    pub file_id: FileId,
-}
-
-impl Location {
-    pub fn write<W: Write>(self, out: &mut W, map: &FileMap) -> io::Result<()> {
-        let path = map.get_path(self.file_id);
-        write!(
-            out,
-            "{}:{}:{}",
-            path.as_os_str().to_str().unwrap(),
-            self.line + 1,
-            self.column + 1
-        )
     }
 }

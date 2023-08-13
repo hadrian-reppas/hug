@@ -21,8 +21,8 @@
 - [x] Refactor pattern parsing
 - [x] Parse `mut self` in signatures
 - [x] Parse `&mut`
-- [ ] Keep track of `CrateId`s
-- [ ] Refactor spans
+- [x] Keep track of `CrateId`s
+- [x] Refactor spans
 - [ ] Add multiline comments
 - [ ] Allow arbitrary types in where items
 - [ ] Come up with new syntax for functional dependencies

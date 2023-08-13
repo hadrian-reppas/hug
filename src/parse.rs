@@ -3,12 +3,12 @@ use std::collections::VecDeque;
 use crate::ast::*;
 use crate::error::Error;
 use crate::hir::{HirId, IdCell};
-use crate::io::FileId;
+use crate::io::{CrateId, FileId};
 use crate::lex::{Token, TokenKind, TokenKind::*, Tokens};
 use crate::span::Span;
 
-pub fn parse(code: &str, file_id: FileId) -> Result<Vec<UnloadedItem>, Error> {
-    let mut parser = Parser::new(code, file_id);
+pub fn parse(code: &str, file_id: FileId, crate_id: CrateId) -> Result<Vec<UnloadedItem>, Error> {
+    let mut parser = Parser::new(code, file_id, crate_id);
     parser.items()
 }
 
@@ -18,9 +18,9 @@ struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    fn new(code: &'a str, file_id: FileId) -> Self {
+    fn new(code: &'a str, file_id: FileId, crate_id: CrateId) -> Self {
         Parser {
-            tokens: Tokens::new(code, file_id),
+            tokens: Tokens::new(code, file_id, crate_id),
             peek: VecDeque::new(),
         }
     }

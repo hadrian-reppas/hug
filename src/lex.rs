@@ -2,8 +2,8 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 use crate::error::Error;
-use crate::io::FileId;
-use crate::span::{Location, Span};
+use crate::io::{CrateId, FileId};
+use crate::span::Span;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Token {
@@ -18,10 +18,11 @@ pub struct Tokens<'a> {
     line: usize,
     column: usize,
     file_id: FileId,
+    crate_id: CrateId,
 }
 
 impl<'a> Tokens<'a> {
-    pub fn new(code: &'a str, file_id: FileId) -> Self {
+    pub fn new(code: &'a str, file_id: FileId, crate_id: CrateId) -> Self {
         Tokens {
             suffix: code,
             code,
@@ -29,6 +30,7 @@ impl<'a> Tokens<'a> {
             line: 0,
             column: 0,
             file_id,
+            crate_id,
         }
     }
 
@@ -49,15 +51,13 @@ impl<'a> Tokens<'a> {
     }
 
     fn make_span(&mut self, len: usize) -> Span {
-        let location = Location {
-            line: self.line,
-            column: self.column,
-            file_id: self.file_id,
-        };
         let span = Span {
             start: self.start,
             end: self.start + len,
-            location,
+            line: self.line,
+            column: self.column,
+            file_id: self.file_id,
+            crate_id: self.crate_id,
         };
 
         for c in self.suffix[..len].chars() {
