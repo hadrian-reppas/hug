@@ -103,6 +103,7 @@ impl<'a> Parser<'a> {
             Fn => self.fn_def(annotations, pub_span),
             Struct => self.struct_def(annotations, pub_span),
             Enum => self.enum_def(annotations, pub_span),
+            Union => self.union_def(annotations, pub_span),
             Impl => self.impl_block(annotations, pub_span),
             Type => self.type_alias(annotations, pub_span),
             Trait => self.trait_def(annotations, pub_span),
@@ -435,15 +436,15 @@ impl<'a> Parser<'a> {
                 is_pub,
                 name,
                 generic_params,
-                fields: Vec::new(),
+                members: Vec::new(),
                 span,
             });
         }
 
-        let mut fields = vec![self.struct_field()?];
+        let mut members = vec![self.member()?];
         while !self.peek(RBrace)? && !self.peek([Comma, RBrace])? {
             self.expect(Comma)?;
-            fields.push(self.struct_field()?);
+            members.push(self.member()?);
         }
         self.consume(Comma)?;
         let last = self.expect(RBrace)?;
@@ -454,7 +455,55 @@ impl<'a> Parser<'a> {
             is_pub,
             name,
             generic_params,
-            fields,
+            members,
+            span,
+        })
+    }
+
+    fn union_def(
+        &mut self,
+        annotations: Vec<Annotation>,
+        pub_span: Option<Span>,
+    ) -> Result<UnloadedItem, Error> {
+        let (first_span, is_pub) = self.handle_pub(pub_span, Union)?;
+
+        let name = self.name()?;
+        let generic_params = if self.peek(Lt)? {
+            Some(self.generic_params()?)
+        } else {
+            None
+        };
+
+        self.expect(LBrace)?;
+
+        if self.peek(RBrace)? {
+            let last = self.expect(RBrace)?;
+            let span = first_span.to(last.span);
+            return Ok(UnloadedItem::Union {
+                annotations,
+                is_pub,
+                name,
+                generic_params,
+                members: Vec::new(),
+                span,
+            });
+        }
+
+        let mut members = vec![self.member()?];
+        while !self.peek(RBrace)? && !self.peek([Comma, RBrace])? {
+            self.expect(Comma)?;
+            members.push(self.member()?);
+        }
+        self.consume(Comma)?;
+        let last = self.expect(RBrace)?;
+
+        let span = first_span.to(last.span);
+        Ok(UnloadedItem::Union {
+            annotations,
+            is_pub,
+            name,
+            generic_params,
+            members,
             span,
         })
     }
@@ -483,7 +532,7 @@ impl<'a> Parser<'a> {
         Ok(GenericParams { params, span })
     }
 
-    fn struct_field(&mut self) -> Result<StructField, Error> {
+    fn member(&mut self) -> Result<Member, Error> {
         let annotations = self.annotations()?;
         if self.peek(Pub)? {
             let first = self.expect(Pub)?;
@@ -492,7 +541,7 @@ impl<'a> Parser<'a> {
             let ty = self.ty()?;
 
             let span = first.span.to(ty.span());
-            Ok(StructField {
+            Ok(Member {
                 annotations,
                 is_pub: true,
                 name,
@@ -505,7 +554,7 @@ impl<'a> Parser<'a> {
             let ty = self.ty()?;
 
             let span = name.span.to(ty.span());
-            Ok(StructField {
+            Ok(Member {
                 annotations,
                 is_pub: false,
                 name,
@@ -843,7 +892,7 @@ impl<'a> Parser<'a> {
             let annotations = self.annotations()?;
             match self.peek_kind()? {
                 Let => stmts.push(self.local(annotations)?),
-                Use | Struct | Enum | Extern | Type | Fn | Const | Static => {
+                Use | Struct | Enum | Union | Type | Extern | Fn | Const | Static => {
                     stmts.push(self.item(annotations)?.try_into().unwrap())
                 }
                 Semi => {
@@ -1282,7 +1331,7 @@ impl<'a> Parser<'a> {
                     if self.peek(Ident)? {
                         let name = self.name()?;
                         let span = lhs.span().to(name.span);
-                        Expr::Field {
+                        Expr::Member {
                             expr: Box::new(lhs),
                             name,
                             span,
@@ -1290,7 +1339,7 @@ impl<'a> Parser<'a> {
                     } else if self.peek(Int)? {
                         let index = self.expect(Int)?.span;
                         let span = lhs.span().to(index);
-                        Expr::TupleField {
+                        Expr::TupleMember {
                             expr: Box::new(lhs),
                             index,
                             span,
@@ -1603,21 +1652,25 @@ impl<'a> Parser<'a> {
                 let span = path.span.to(last.span);
                 return Ok(Expr::Struct {
                     path,
-                    fields: Vec::new(),
+                    members: Vec::new(),
                     span,
                 });
             }
 
-            let mut fields = vec![self.expr_field()?];
+            let mut members = vec![self.expr_field()?];
             while !self.peek(RBrace)? && !self.peek([Comma, RBrace])? {
                 self.expect(Comma)?;
-                fields.push(self.expr_field()?);
+                members.push(self.expr_field()?);
             }
             self.consume(Comma)?;
             let last = self.expect(RBrace)?;
 
             let span = path.span.to(last.span);
-            Ok(Expr::Struct { path, fields, span })
+            Ok(Expr::Struct {
+                path,
+                members,
+                span,
+            })
         } else {
             let span = path.span;
             Ok(Expr::Path { path, span })
@@ -1770,15 +1823,15 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn expr_field(&mut self) -> Result<ExprField, Error> {
+    fn expr_field(&mut self) -> Result<ExprMember, Error> {
         let name = self.name()?;
         if self.consume(Colon)? {
             let expr = self.expr(BindingPower::Start, true)?;
             let span = name.span.to(expr.span());
-            Ok(ExprField::Expr { name, expr, span })
+            Ok(ExprMember::Expr { name, expr, span })
         } else {
             let span = name.span;
-            Ok(ExprField::Name { name, span })
+            Ok(ExprMember::Name { name, span })
         }
     }
 
@@ -2262,7 +2315,7 @@ impl<'a> Parser<'a> {
             let span = path.span.to(last.span);
             return Ok(Pattern::Struct {
                 path,
-                fields: Vec::new(),
+                members: Vec::new(),
                 dots: None,
                 span,
             });
@@ -2274,16 +2327,16 @@ impl<'a> Parser<'a> {
             let span = path.span.to(last.span);
             return Ok(Pattern::Struct {
                 path,
-                fields: Vec::new(),
+                members: Vec::new(),
                 dots: Some(dots),
                 span,
             });
         }
 
-        let mut fields = vec![self.field_pattern()?];
+        let mut members = vec![self.member_pattern()?];
         while !self.peek(RBrace)? && !self.peek([Comma, RBrace])? && !self.peek([Comma, Dot])? {
             self.expect(Comma)?;
-            fields.push(self.field_pattern()?);
+            members.push(self.member_pattern()?);
         }
         self.consume(Comma)?;
         let dots = if self.peek(Dot)? {
@@ -2298,18 +2351,18 @@ impl<'a> Parser<'a> {
         let span = path.span.to(last.span);
         Ok(Pattern::Struct {
             path,
-            fields,
+            members,
             dots,
             span,
         })
     }
 
-    fn field_pattern(&mut self) -> Result<FieldPattern, Error> {
+    fn member_pattern(&mut self) -> Result<MemberPattern, Error> {
         if self.peek(Mut)? {
             let first = self.expect(Mut)?;
             let name = self.name()?;
             let span = first.span.to(name.span);
-            Ok(FieldPattern::Name {
+            Ok(MemberPattern::Name {
                 is_mut: true,
                 name,
                 span,
@@ -2319,14 +2372,14 @@ impl<'a> Parser<'a> {
             if self.consume(Colon)? {
                 let pattern = self.pattern()?;
                 let span = name.span.to(pattern.span());
-                Ok(FieldPattern::Pattern {
+                Ok(MemberPattern::Pattern {
                     name,
                     pattern,
                     span,
                 })
             } else {
                 let span = name.span;
-                Ok(FieldPattern::Name {
+                Ok(MemberPattern::Name {
                     is_mut: false,
                     name,
                     span,
@@ -2691,7 +2744,7 @@ impl Sequence for TokenKind {
             Dash, Plus, Star, Slash, Caret, Percent, Amp, Bar, Hash, And, As, Break, Const, Continue,
             Crate, Else, Enum, Extern, False, Fn, For, Goto, If, Impl, In, Let, Loop, Match, Mod,
             Mut, Not, Or, Pub, Return, SelfType, SelfValue, Static, Struct, Trait, Try, True,
-            Type, Use, Where, While, Eof,
+            Type, Union, Use, Where, While, Eof,
         }
     }
 }

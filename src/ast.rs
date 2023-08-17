@@ -138,7 +138,7 @@ pub enum UnloadedItem {
         is_pub: bool,
         name: Name,
         generic_params: Option<GenericParams>,
-        fields: Vec<StructField>,
+        members: Vec<Member>,
         span: Span,
     },
     Enum {
@@ -147,6 +147,14 @@ pub enum UnloadedItem {
         name: Name,
         generic_params: Option<GenericParams>,
         items: Vec<EnumItem>,
+        span: Span,
+    },
+    Union {
+        annotations: Vec<Annotation>,
+        is_pub: bool,
+        name: Name,
+        generic_params: Option<GenericParams>,
+        members: Vec<Member>,
         span: Span,
     },
     Type {
@@ -235,6 +243,7 @@ impl UnloadedItem {
             UnloadedItem::Use { span, .. }
             | UnloadedItem::Struct { span, .. }
             | UnloadedItem::Enum { span, .. }
+            | UnloadedItem::Union { span, .. }
             | UnloadedItem::Type { span, .. }
             | UnloadedItem::Mod { span, .. }
             | UnloadedItem::ExternFn { span, .. }
@@ -263,7 +272,7 @@ pub enum Item {
         is_pub: bool,
         name: Name,
         generic_params: Option<GenericParams>,
-        fields: Vec<StructField>,
+        members: Vec<Member>,
         span: Span,
     },
     Enum {
@@ -272,6 +281,14 @@ pub enum Item {
         name: Name,
         generic_params: Option<GenericParams>,
         items: Vec<EnumItem>,
+        span: Span,
+    },
+    Union {
+        annotations: Vec<Annotation>,
+        is_pub: bool,
+        name: Name,
+        generic_params: Option<GenericParams>,
+        members: Vec<Member>,
         span: Span,
     },
     Type {
@@ -361,6 +378,7 @@ impl Item {
             Item::Use { span, .. }
             | Item::Struct { span, .. }
             | Item::Enum { span, .. }
+            | Item::Union { span, .. }
             | Item::Type { span, .. }
             | Item::Mod { span, .. }
             | Item::ExternFn { span, .. }
@@ -397,14 +415,14 @@ impl TryFrom<UnloadedItem> for Item {
                 is_pub,
                 name,
                 generic_params,
-                fields,
+                members,
                 span,
             } => Ok(Item::Struct {
                 annotations,
                 is_pub,
                 name,
                 generic_params,
-                fields,
+                members,
                 span,
             }),
             UnloadedItem::Enum {
@@ -420,6 +438,21 @@ impl TryFrom<UnloadedItem> for Item {
                 name,
                 generic_params,
                 items,
+                span,
+            }),
+            UnloadedItem::Union {
+                annotations,
+                is_pub,
+                name,
+                generic_params,
+                members,
+                span,
+            } => Ok(Item::Union {
+                annotations,
+                is_pub,
+                name,
+                generic_params,
+                members,
                 span,
             }),
             UnloadedItem::Type {
@@ -582,7 +615,7 @@ pub enum UseTreeKind {
 }
 
 #[derive(Debug)]
-pub struct StructField {
+pub struct Member {
     pub annotations: Vec<Annotation>,
     pub is_pub: bool,
     pub name: Name,
@@ -765,14 +798,7 @@ pub enum Stmt {
         annotations: Vec<Annotation>,
         name: Name,
         generic_params: Option<GenericParams>,
-        fields: Vec<StructField>,
-        span: Span,
-    },
-    Type {
-        annotations: Vec<Annotation>,
-        name: Name,
-        generic_params: Option<GenericParams>,
-        ty: Ty,
+        members: Vec<Member>,
         span: Span,
     },
     Enum {
@@ -780,6 +806,20 @@ pub enum Stmt {
         name: Name,
         generic_params: Option<GenericParams>,
         items: Vec<EnumItem>,
+        span: Span,
+    },
+    Union {
+        annotations: Vec<Annotation>,
+        name: Name,
+        generic_params: Option<GenericParams>,
+        members: Vec<Member>,
+        span: Span,
+    },
+    Type {
+        annotations: Vec<Annotation>,
+        name: Name,
+        generic_params: Option<GenericParams>,
+        ty: Ty,
         span: Span,
     },
     ExternFn {
@@ -831,10 +871,11 @@ impl Stmt {
             | Stmt::Use { span, .. }
             | Stmt::Struct { span, .. }
             | Stmt::Enum { span, .. }
+            | Stmt::Union { span, .. }
+            | Stmt::Type { span, .. }
             | Stmt::ExternFn { span, .. }
             | Stmt::ExternType { span, .. }
             | Stmt::ExternStatic { span, .. }
-            | Stmt::Type { span, .. }
             | Stmt::Fn { span, .. }
             | Stmt::Const { span, .. }
             | Stmt::Static { span, .. } => *span,
@@ -862,14 +903,14 @@ impl TryFrom<UnloadedItem> for Stmt {
                 annotations,
                 name,
                 generic_params,
-                fields,
+                members,
                 span,
                 ..
             } => Ok(Stmt::Struct {
                 annotations,
                 name,
                 generic_params,
-                fields,
+                members,
                 span,
             }),
             UnloadedItem::Enum {
@@ -884,6 +925,20 @@ impl TryFrom<UnloadedItem> for Stmt {
                 name,
                 generic_params,
                 items,
+                span,
+            }),
+            UnloadedItem::Union {
+                annotations,
+                name,
+                generic_params,
+                members,
+                span,
+                ..
+            } => Ok(Stmt::Union {
+                annotations,
+                name,
+                generic_params,
+                members,
                 span,
             }),
             UnloadedItem::Type {
@@ -1115,12 +1170,12 @@ pub enum Expr {
         op_span: Span,
         span: Span,
     },
-    Field {
+    Member {
         expr: Box<Expr>,
         name: Name,
         span: Span,
     },
-    TupleField {
+    TupleMember {
         expr: Box<Expr>,
         index: Span,
         span: Span,
@@ -1159,7 +1214,7 @@ pub enum Expr {
     },
     Struct {
         path: GenericPath,
-        fields: Vec<ExprField>,
+        members: Vec<ExprMember>,
         span: Span,
     },
     Repeat {
@@ -1201,8 +1256,8 @@ impl Expr {
             | Expr::Try { span, .. }
             | Expr::Assign { span, .. }
             | Expr::AssignOp { span, .. }
-            | Expr::Field { span, .. }
-            | Expr::TupleField { span, .. }
+            | Expr::Member { span, .. }
+            | Expr::TupleMember { span, .. }
             | Expr::Index { span, .. }
             | Expr::Range { span, .. }
             | Expr::Path { span, .. }
@@ -1390,15 +1445,15 @@ impl ElseKind {
 }
 
 #[derive(Debug)]
-pub enum ExprField {
+pub enum ExprMember {
     Name { name: Name, span: Span },
     Expr { name: Name, expr: Expr, span: Span },
 }
 
-impl ExprField {
+impl ExprMember {
     pub fn span(&self) -> Span {
         match self {
-            ExprField::Name { span, .. } | ExprField::Expr { span, .. } => *span,
+            ExprMember::Name { span, .. } | ExprMember::Expr { span, .. } => *span,
         }
     }
 }
@@ -1419,7 +1474,7 @@ pub enum Pattern {
     },
     Struct {
         path: Path,
-        fields: Vec<FieldPattern>,
+        members: Vec<MemberPattern>,
         dots: Option<Span>,
         span: Span,
     },
@@ -1473,7 +1528,7 @@ pub enum PatternLiteralKind {
 }
 
 #[derive(Debug)]
-pub enum FieldPattern {
+pub enum MemberPattern {
     Name {
         is_mut: bool,
         name: Name,
@@ -1486,10 +1541,10 @@ pub enum FieldPattern {
     },
 }
 
-impl FieldPattern {
+impl MemberPattern {
     pub fn span(&self) -> Span {
         match self {
-            FieldPattern::Name { span, .. } | FieldPattern::Pattern { span, .. } => *span,
+            MemberPattern::Name { span, .. } | MemberPattern::Pattern { span, .. } => *span,
         }
     }
 }

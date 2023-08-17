@@ -29,8 +29,8 @@
 - [x] Come up with new syntax for functional dependencies
 - [x] Allow multiple types on RHS of functional dependencies
 - [x] Change `extern type`
-- [ ] Add `union` keyword
-- [ ] Parse unions
+- [x] Add `union` keyword
+- [x] Parse unions
 - [ ] Parse `extern struct` and `extern union`
 - [ ] Parse chained comparisons
 - [ ] Parse `in` expressions
