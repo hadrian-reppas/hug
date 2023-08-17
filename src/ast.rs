@@ -1377,6 +1377,7 @@ pub enum BinOp {
     Le,
     Gt,
     Ge,
+    In,
     LogicalAnd,
     LogicalOr,
 }

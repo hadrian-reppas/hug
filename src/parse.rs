@@ -1512,6 +1512,8 @@ impl<'a> Parser<'a> {
             bop!(Bar => Or, Or)
         } else if self.peek(Caret)? {
             bop!(Caret => Xor, Xor)
+        } else if self.peek(In)? {
+            bop!(In => In, In)
         } else if self.peek(And)? {
             bop!(And => LogicalAnd, LogicalAnd)
         } else if self.peek(Or)? {
@@ -2762,6 +2764,7 @@ enum BindingPower {
     Range,
     LogicalOr,
     LogicalAnd,
+    In,
     Cmp,
     Or,
     Xor,
