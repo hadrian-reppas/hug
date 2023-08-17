@@ -173,7 +173,9 @@ pub enum UnloadedItem {
         annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
-        info: Option<ExternTypeInfo>,
+        extern_name: Name,
+        size: Span,
+        align: Span,
         span: Span,
     },
     ExternStatic {
@@ -297,7 +299,9 @@ pub enum Item {
         annotations: Vec<Annotation>,
         is_pub: bool,
         name: Name,
-        info: Option<ExternTypeInfo>,
+        extern_name: Name,
+        size: Span,
+        align: Span,
         span: Span,
     },
     ExternStatic {
@@ -454,13 +458,17 @@ impl TryFrom<UnloadedItem> for Item {
                 annotations,
                 is_pub,
                 name,
-                info,
+                extern_name,
+                size,
+                align,
                 span,
             } => Ok(Item::ExternType {
                 annotations,
                 is_pub,
                 name,
-                info,
+                extern_name,
+                size,
+                align,
                 span,
             }),
             UnloadedItem::ExternStatic {
@@ -587,14 +595,6 @@ pub struct EnumItem {
     pub annotations: Vec<Annotation>,
     pub name: Name,
     pub tuple: Option<Vec<Ty>>,
-    pub span: Span,
-}
-
-#[derive(Debug)]
-pub struct ExternTypeInfo {
-    pub name: Name,
-    pub size: Span,
-    pub align: Span,
     pub span: Span,
 }
 
@@ -790,7 +790,9 @@ pub enum Stmt {
     ExternType {
         annotations: Vec<Annotation>,
         name: Name,
-        info: Option<ExternTypeInfo>,
+        extern_name: Name,
+        size: Span,
+        align: Span,
         span: Span,
     },
     ExternStatic {
@@ -951,13 +953,17 @@ impl TryFrom<UnloadedItem> for Stmt {
             UnloadedItem::ExternType {
                 annotations,
                 name,
-                info,
+                extern_name,
+                size,
+                align,
                 span,
                 ..
             } => Ok(Stmt::ExternType {
                 annotations,
                 name,
-                info,
+                extern_name,
+                size,
+                align,
                 span,
             }),
             UnloadedItem::ExternStatic {

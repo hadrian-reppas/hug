@@ -1950,23 +1950,14 @@ impl<'a> Parser<'a> {
             Type => {
                 self.expect(Type)?;
                 let name = self.name()?;
-                let info = if self.consume(Eq)? {
-                    let name = self.name()?;
-                    self.expect(LParen)?;
-                    let size = self.expect(Int)?.span;
-                    self.expect(Comma)?;
-                    let align = self.expect(Int)?.span;
-                    let last = self.expect(RParen)?;
-                    let span = name.span.to(last.span);
-                    Some(ExternTypeInfo {
-                        name,
-                        size,
-                        align,
-                        span,
-                    })
-                } else {
-                    None
-                };
+                self.expect(Eq)?;
+                let extern_name = self.name()?;
+                self.expect(LBrack)?;
+                let size = self.expect(Int)?.span;
+                self.expect(Comma)?;
+                let align = self.expect(Int)?.span;
+                self.consume(Comma)?;
+                self.expect(RBrack)?;
                 let last = self.expect(Semi)?;
 
                 let span = first_span.to(last.span);
@@ -1974,7 +1965,9 @@ impl<'a> Parser<'a> {
                     annotations,
                     is_pub,
                     name,
-                    info,
+                    extern_name,
+                    size,
+                    align,
                     span,
                 })
             }
