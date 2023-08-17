@@ -32,7 +32,7 @@
 - [x] Add `union` keyword
 - [x] Parse unions
 - [ ] Parse `extern struct` and `extern union`
-- [ ] Parse chained comparisons
+- [x] Parse chained comparisons
 - [x] Parse `in` expressions
 - [ ] Add new type for lhs of Assign/AssignOp
 - [ ] Nuke name resolution

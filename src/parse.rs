@@ -856,7 +856,9 @@ impl<'a> Parser<'a> {
         dash.span.by(gt.span, self.tokens.code())?;
 
         if self.peek(Ident)? {
-            todo!()
+            let name = self.name()?;
+            let span = name.span;
+            Ok((vec![name], span))
         } else if self.peek(Lt)? {
             self.expect(Lt)?;
             if self.peek(Gt)? {
@@ -1186,22 +1188,9 @@ impl<'a> Parser<'a> {
 
         while let Some(op_info) = self.next_op(bp)? {
             lhs = match op_info {
-                OpInfo::BinOp {
-                    op,
-                    op_span,
-                    bp,
-                    is_cmp,
-                } => {
+                OpInfo::BinOp { op, op_span, bp } => {
                     let rhs = self.expr(bp, allow_struct)?;
                     let span = lhs.span().to(rhs.span());
-
-                    if is_cmp && (lhs.is_cmp() || rhs.is_cmp()) {
-                        return Err(Error::new(
-                            "comparison operators cannot be chained",
-                            Some(span),
-                        )
-                        .note("consider adding parentheses", None));
-                    }
 
                     Expr::Binary {
                         op,
@@ -1209,6 +1198,54 @@ impl<'a> Parser<'a> {
                         rhs: Box::new(rhs),
                         op_span,
                         span,
+                    }
+                }
+                OpInfo::Cmp { op, op_span } => {
+                    let rhs = self.expr(BindingPower::Cmp, allow_struct)?;
+
+                    match lhs {
+                        Expr::Compare { compare, .. } => {
+                            let compare = compare.append(rhs, op, op_span)?;
+                            let span = compare.span();
+                            Expr::Compare { compare, span }
+                        }
+                        lhs => {
+                            let span = lhs.span().to(rhs.span());
+                            let compare = match op {
+                                CmpOp::Eq => Compare::Eq {
+                                    lhs: Box::new(lhs),
+                                    others: vec![(op_span, rhs)],
+                                    span,
+                                },
+                                CmpOp::Ne => Compare::Ne {
+                                    lhs: Box::new(lhs),
+                                    rhs: Box::new(rhs),
+                                    op_span,
+                                    span,
+                                },
+                                CmpOp::Lt => Compare::Increasing {
+                                    lhs: Box::new(lhs),
+                                    comparators: vec![(Comparison::Exclusive(op_span), rhs)],
+                                    span,
+                                },
+                                CmpOp::Le => Compare::Increasing {
+                                    lhs: Box::new(lhs),
+                                    comparators: vec![(Comparison::Inclusive(op_span), rhs)],
+                                    span,
+                                },
+                                CmpOp::Gt => Compare::Decreasing {
+                                    lhs: Box::new(lhs),
+                                    comparators: vec![(Comparison::Exclusive(op_span), rhs)],
+                                    span,
+                                },
+                                CmpOp::Ge => Compare::Decreasing {
+                                    lhs: Box::new(lhs),
+                                    comparators: vec![(Comparison::Inclusive(op_span), rhs)],
+                                    span,
+                                },
+                            };
+                            Expr::Compare { compare, span }
+                        }
                     }
                 }
                 OpInfo::AssignOp { op, op_span } => {
@@ -1454,7 +1491,6 @@ impl<'a> Parser<'a> {
                     op: BinOp::$op,
                     op_span,
                     bp: BindingPower::$bp,
-                    is_cmp: BindingPower::$bp == BindingPower::Cmp,
                 }))
             }};
 
@@ -1471,7 +1507,35 @@ impl<'a> Parser<'a> {
                     op: BinOp::$op,
                     op_span,
                     bp: BindingPower::$bp,
-                    is_cmp: BindingPower::$bp == BindingPower::Cmp,
+                }))
+            }};
+        }
+
+        macro_rules! cmp {
+            ($tok:ident => $op:ident) => {{
+                if BindingPower::Cmp <= bp {
+                    return Ok(None);
+                }
+
+                let op_span = self.expect($tok)?.span;
+                Ok(Some(OpInfo::Cmp {
+                    op: CmpOp::$op,
+                    op_span,
+                }))
+            }};
+
+            ($tok1:ident, $tok2:ident => $op:ident) => {{
+                if BindingPower::Cmp <= bp {
+                    return Ok(None);
+                }
+
+                let first_span = self.expect($tok1)?.span;
+                let last_span = self.expect($tok2)?.span;
+                let op_span = first_span.by(last_span, self.tokens.code())?;
+
+                Ok(Some(OpInfo::Cmp {
+                    op: CmpOp::$op,
+                    op_span,
                 }))
             }};
         }
@@ -1523,17 +1587,17 @@ impl<'a> Parser<'a> {
         } else if self.peek([Gt, Gt])? {
             bop!(Gt, Gt => Shr, Shift)
         } else if self.peek([Eq, Eq])? {
-            bop!(Eq, Eq => Eq, Cmp)
+            cmp!(Eq, Eq => Eq)
         } else if self.peek([Bang, Eq])? {
-            bop!(Bang, Eq => Ne, Cmp)
+            cmp!(Bang, Eq => Ne)
         } else if self.peek([Lt, Eq])? {
-            bop!(Lt, Eq => Le, Cmp)
+            cmp!(Lt, Eq => Le)
         } else if self.peek([Gt, Eq])? {
-            bop!(Gt, Eq => Ge, Cmp)
+            cmp!(Gt, Eq => Ge)
         } else if self.peek(Lt)? {
-            bop!(Lt => Lt, Cmp)
+            cmp!(Lt => Lt)
         } else if self.peek(Gt)? {
-            bop!(Gt => Gt, Cmp)
+            cmp!(Gt => Gt)
         } else if self.peek(Eq)? {
             self.expect(Eq)?;
             Ok(Some(OpInfo::Assign))
@@ -2764,8 +2828,8 @@ enum BindingPower {
     Range,
     LogicalOr,
     LogicalAnd,
-    In,
     Cmp,
+    In,
     Or,
     Xor,
     And,
@@ -2780,7 +2844,10 @@ enum OpInfo {
         op: BinOp,
         op_span: Span,
         bp: BindingPower,
-        is_cmp: bool,
+    },
+    Cmp {
+        op: CmpOp,
+        op_span: Span,
     },
     AssignOp {
         op: AssignOp,
@@ -2798,4 +2865,13 @@ enum OpInfo {
     Try {
         qmark_span: Span,
     },
+}
+
+pub enum CmpOp {
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
 }

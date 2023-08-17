@@ -1,6 +1,8 @@
 use std::fmt::{self, Debug};
 
+use crate::error::Error;
 use crate::hir::{HirId, IdCell};
+use crate::parse::CmpOp;
 use crate::span::Span;
 
 pub struct Name {
@@ -1222,6 +1224,10 @@ pub enum Expr {
         count: Span,
         span: Span,
     },
+    Compare {
+        compare: Compare,
+        span: Span,
+    },
     Paren {
         expr: Box<Expr>,
         span: Span,
@@ -1267,6 +1273,7 @@ impl Expr {
             | Expr::Return { span, .. }
             | Expr::Struct { span, .. }
             | Expr::Repeat { span, .. }
+            | Expr::Compare { span, .. }
             | Expr::Paren { span, .. } => *span,
         }
     }
@@ -1293,15 +1300,243 @@ impl Expr {
     pub fn is_cast(&self) -> bool {
         matches!(self, Expr::Cast { .. })
     }
+}
 
-    pub fn is_cmp(&self) -> bool {
-        matches!(
-            self,
-            Expr::Binary {
-                op: BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge,
-                ..
+#[derive(Debug)]
+pub enum Compare {
+    Eq {
+        lhs: Box<Expr>,
+        others: Vec<(Span, Expr)>,
+        span: Span,
+    },
+    Ne {
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
+        op_span: Span,
+        span: Span,
+    },
+    Increasing {
+        lhs: Box<Expr>,
+        comparators: Vec<(Comparison, Expr)>,
+        span: Span,
+    },
+    Decreasing {
+        lhs: Box<Expr>,
+        comparators: Vec<(Comparison, Expr)>,
+        span: Span,
+    },
+}
+
+impl Compare {
+    pub fn append(self, rhs: Expr, op: CmpOp, op_span: Span) -> Result<Compare, Error> {
+        let span = self.span().to(rhs.span());
+        match (self, op) {
+            (
+                Compare::Eq {
+                    lhs, mut others, ..
+                },
+                CmpOp::Eq,
+            ) => {
+                others.push((op_span, rhs));
+                Ok(Compare::Eq { lhs, others, span })
             }
-        )
+            (Compare::Eq { lhs, others, .. }, CmpOp::Lt) => {
+                let mut comparators: Vec<_> = others
+                    .into_iter()
+                    .map(|(span, expr)| (Comparison::Equal(span), expr))
+                    .collect();
+                comparators.push((Comparison::Exclusive(op_span), rhs));
+                Ok(Compare::Increasing {
+                    lhs,
+                    comparators,
+                    span,
+                })
+            }
+            (Compare::Eq { lhs, others, .. }, CmpOp::Le) => {
+                let mut comparators: Vec<_> = others
+                    .into_iter()
+                    .map(|(span, expr)| (Comparison::Equal(span), expr))
+                    .collect();
+                comparators.push((Comparison::Inclusive(op_span), rhs));
+                Ok(Compare::Increasing {
+                    lhs,
+                    comparators,
+                    span,
+                })
+            }
+            (Compare::Eq { lhs, others, .. }, CmpOp::Gt) => {
+                let mut comparators: Vec<_> = others
+                    .into_iter()
+                    .map(|(span, expr)| (Comparison::Equal(span), expr))
+                    .collect();
+                comparators.push((Comparison::Exclusive(op_span), rhs));
+                Ok(Compare::Decreasing {
+                    lhs,
+                    comparators,
+                    span,
+                })
+            }
+            (Compare::Eq { lhs, others, .. }, CmpOp::Ge) => {
+                let mut comparators: Vec<_> = others
+                    .into_iter()
+                    .map(|(span, expr)| (Comparison::Equal(span), expr))
+                    .collect();
+                comparators.push((Comparison::Inclusive(op_span), rhs));
+                Ok(Compare::Decreasing {
+                    lhs,
+                    comparators,
+                    span,
+                })
+            }
+            (Compare::Eq { .. }, CmpOp::Ne) => {
+                Err(Error::new("illegal comparison chain", Some(span))
+                    .note("`!=` is not allowed in an equality chain", Some(op_span)))
+            }
+            (Compare::Ne { op_span, .. }, _) => {
+                Err(Error::new("illegal comparison chain", Some(span))
+                    .note("`!=` operators cannot be chained", Some(op_span)))
+            }
+            (
+                Compare::Increasing {
+                    lhs,
+                    mut comparators,
+                    ..
+                },
+                CmpOp::Eq,
+            ) => {
+                comparators.push((Comparison::Equal(op_span), rhs));
+                Ok(Compare::Increasing {
+                    lhs,
+                    comparators,
+                    span,
+                })
+            }
+            (Compare::Increasing { .. }, CmpOp::Ne) => {
+                Err(Error::new("illegal comparison chain", Some(span))
+                    .note("`!=` is not allowed in an increasing chain", Some(op_span)))
+            }
+            (
+                Compare::Increasing {
+                    lhs,
+                    mut comparators,
+                    ..
+                },
+                CmpOp::Lt,
+            ) => {
+                comparators.push((Comparison::Exclusive(op_span), rhs));
+                Ok(Compare::Increasing {
+                    lhs,
+                    comparators,
+                    span,
+                })
+            }
+            (
+                Compare::Increasing {
+                    lhs,
+                    mut comparators,
+                    ..
+                },
+                CmpOp::Le,
+            ) => {
+                comparators.push((Comparison::Inclusive(op_span), rhs));
+                Ok(Compare::Increasing {
+                    lhs,
+                    comparators,
+                    span,
+                })
+            }
+            (Compare::Increasing { .. }, CmpOp::Gt) => {
+                Err(Error::new("illegal comparison chain", Some(span))
+                    .note("`>` is not allowed in an increasing chain", Some(op_span)))
+            }
+            (Compare::Increasing { .. }, CmpOp::Ge) => {
+                Err(Error::new("illegal comparison chain", Some(span))
+                    .note("`>=` is not allowed in an increasing chain", Some(op_span)))
+            }
+            (
+                Compare::Decreasing {
+                    lhs,
+                    mut comparators,
+                    ..
+                },
+                CmpOp::Eq,
+            ) => {
+                comparators.push((Comparison::Equal(op_span), rhs));
+                Ok(Compare::Decreasing {
+                    lhs,
+                    comparators,
+                    span,
+                })
+            }
+            (Compare::Decreasing { .. }, CmpOp::Ne) => {
+                Err(Error::new("illegal comparison chain", Some(span))
+                    .note("`!=` is not allowed in a decreasing chain", Some(op_span)))
+            }
+            (Compare::Decreasing { .. }, CmpOp::Lt) => {
+                Err(Error::new("illegal comparison chain", Some(span))
+                    .note("`<` is not allowed in a decreasing chain", Some(op_span)))
+            }
+            (Compare::Decreasing { .. }, CmpOp::Le) => {
+                Err(Error::new("illegal comparison chain", Some(span))
+                    .note("`<=` is not allowed in a decreasing chain", Some(op_span)))
+            }
+            (
+                Compare::Decreasing {
+                    lhs,
+                    mut comparators,
+                    ..
+                },
+                CmpOp::Gt,
+            ) => {
+                comparators.push((Comparison::Exclusive(op_span), rhs));
+                Ok(Compare::Decreasing {
+                    lhs,
+                    comparators,
+                    span,
+                })
+            }
+            (
+                Compare::Decreasing {
+                    lhs,
+                    mut comparators,
+                    ..
+                },
+                CmpOp::Ge,
+            ) => {
+                comparators.push((Comparison::Inclusive(op_span), rhs));
+                Ok(Compare::Decreasing {
+                    lhs,
+                    comparators,
+                    span,
+                })
+            }
+        }
+    }
+
+    pub fn span(&self) -> Span {
+        match self {
+            Compare::Eq { span, .. }
+            | Compare::Ne { span, .. }
+            | Compare::Increasing { span, .. }
+            | Compare::Decreasing { span, .. } => *span,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Comparison {
+    Equal(Span),
+    Inclusive(Span),
+    Exclusive(Span),
+}
+
+impl Comparison {
+    pub fn span(self) -> Span {
+        match self {
+            Comparison::Equal(span) | Comparison::Inclusive(span) | Comparison::Exclusive(span) => {
+                span
+            }
+        }
     }
 }
 
@@ -1371,12 +1606,6 @@ pub enum BinOp {
     Xor,
     Shl,
     Shr,
-    Eq,
-    Ne,
-    Lt,
-    Le,
-    Gt,
-    Ge,
     In,
     LogicalAnd,
     LogicalOr,
