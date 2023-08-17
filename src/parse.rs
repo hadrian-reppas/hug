@@ -412,6 +412,23 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn members(&mut self) -> Result<(Vec<Member>, Span), Error> {
+        self.expect(LBrace)?;
+        if self.peek(RBrace)? {
+            let last = self.expect(RBrace)?;
+            return Ok((Vec::new(), last.span));
+        }
+
+        let mut members = vec![self.member()?];
+        while !self.peek(RBrace)? && !self.peek([Comma, RBrace])? {
+            self.expect(Comma)?;
+            members.push(self.member()?);
+        }
+        self.consume(Comma)?;
+        let last = self.expect(RBrace)?;
+        Ok((members, last.span))
+    }
+
     fn struct_def(
         &mut self,
         annotations: Vec<Annotation>,
@@ -426,30 +443,9 @@ impl<'a> Parser<'a> {
             None
         };
 
-        self.expect(LBrace)?;
+        let (members, last_span) = self.members()?;
 
-        if self.peek(RBrace)? {
-            let last = self.expect(RBrace)?;
-            let span = first_span.to(last.span);
-            return Ok(UnloadedItem::Struct {
-                annotations,
-                is_pub,
-                name,
-                generic_params,
-                members: Vec::new(),
-                span,
-            });
-        }
-
-        let mut members = vec![self.member()?];
-        while !self.peek(RBrace)? && !self.peek([Comma, RBrace])? {
-            self.expect(Comma)?;
-            members.push(self.member()?);
-        }
-        self.consume(Comma)?;
-        let last = self.expect(RBrace)?;
-
-        let span = first_span.to(last.span);
+        let span = first_span.to(last_span);
         Ok(UnloadedItem::Struct {
             annotations,
             is_pub,
@@ -474,30 +470,9 @@ impl<'a> Parser<'a> {
             None
         };
 
-        self.expect(LBrace)?;
+        let (members, last_span) = self.members()?;
 
-        if self.peek(RBrace)? {
-            let last = self.expect(RBrace)?;
-            let span = first_span.to(last.span);
-            return Ok(UnloadedItem::Union {
-                annotations,
-                is_pub,
-                name,
-                generic_params,
-                members: Vec::new(),
-                span,
-            });
-        }
-
-        let mut members = vec![self.member()?];
-        while !self.peek(RBrace)? && !self.peek([Comma, RBrace])? {
-            self.expect(Comma)?;
-            members.push(self.member()?);
-        }
-        self.consume(Comma)?;
-        let last = self.expect(RBrace)?;
-
-        let span = first_span.to(last.span);
+        let span = first_span.to(last_span);
         Ok(UnloadedItem::Union {
             annotations,
             is_pub,
@@ -2103,6 +2078,40 @@ impl<'a> Parser<'a> {
                     is_pub,
                     name,
                     ty,
+                    span,
+                })
+            }
+            Struct => {
+                self.expect(Struct)?;
+                let name = self.name()?;
+                self.expect(Eq)?;
+                let extern_name = self.name()?;
+                let (members, last_span) = self.members()?;
+
+                let span = first_span.to(last_span);
+                Ok(UnloadedItem::ExternStruct {
+                    annotations,
+                    is_pub,
+                    name,
+                    extern_name,
+                    members,
+                    span,
+                })
+            }
+            Union => {
+                self.expect(Union)?;
+                let name = self.name()?;
+                self.expect(Eq)?;
+                let extern_name = self.name()?;
+                let (members, last_span) = self.members()?;
+
+                let span = first_span.to(last_span);
+                Ok(UnloadedItem::ExternUnion {
+                    annotations,
+                    is_pub,
+                    name,
+                    extern_name,
+                    members,
                     span,
                 })
             }

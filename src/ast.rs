@@ -195,6 +195,22 @@ pub enum UnloadedItem {
         ty: Ty,
         span: Span,
     },
+    ExternStruct {
+        annotations: Vec<Annotation>,
+        is_pub: bool,
+        name: Name,
+        extern_name: Name,
+        members: Vec<Member>,
+        span: Span,
+    },
+    ExternUnion {
+        annotations: Vec<Annotation>,
+        is_pub: bool,
+        name: Name,
+        extern_name: Name,
+        members: Vec<Member>,
+        span: Span,
+    },
     Trait {
         annotations: Vec<Annotation>,
         is_pub: bool,
@@ -251,6 +267,8 @@ impl UnloadedItem {
             | UnloadedItem::ExternFn { span, .. }
             | UnloadedItem::ExternType { span, .. }
             | UnloadedItem::ExternStatic { span, .. }
+            | UnloadedItem::ExternStruct { span, .. }
+            | UnloadedItem::ExternUnion { span, .. }
             | UnloadedItem::Trait { span, .. }
             | UnloadedItem::Fn { span, .. }
             | UnloadedItem::Impl { span, .. }
@@ -330,6 +348,22 @@ pub enum Item {
         ty: Ty,
         span: Span,
     },
+    ExternStruct {
+        annotations: Vec<Annotation>,
+        is_pub: bool,
+        name: Name,
+        extern_name: Name,
+        members: Vec<Member>,
+        span: Span,
+    },
+    ExternUnion {
+        annotations: Vec<Annotation>,
+        is_pub: bool,
+        name: Name,
+        extern_name: Name,
+        members: Vec<Member>,
+        span: Span,
+    },
     Trait {
         annotations: Vec<Annotation>,
         is_pub: bool,
@@ -386,6 +420,8 @@ impl Item {
             | Item::ExternFn { span, .. }
             | Item::ExternType { span, .. }
             | Item::ExternStatic { span, .. }
+            | Item::ExternStruct { span, .. }
+            | Item::ExternUnion { span, .. }
             | Item::Trait { span, .. }
             | Item::Fn { span, .. }
             | Item::Impl { span, .. }
@@ -517,6 +553,36 @@ impl TryFrom<UnloadedItem> for Item {
                 is_pub,
                 name,
                 ty,
+                span,
+            }),
+            UnloadedItem::ExternStruct {
+                annotations,
+                is_pub,
+                name,
+                extern_name,
+                members,
+                span,
+            } => Ok(Item::ExternStruct {
+                annotations,
+                is_pub,
+                name,
+                extern_name,
+                members,
+                span,
+            }),
+            UnloadedItem::ExternUnion {
+                annotations,
+                is_pub,
+                name,
+                extern_name,
+                members,
+                span,
+            } => Ok(Item::ExternUnion {
+                annotations,
+                is_pub,
+                name,
+                extern_name,
+                members,
                 span,
             }),
             UnloadedItem::Trait {
@@ -843,6 +909,20 @@ pub enum Stmt {
         ty: Ty,
         span: Span,
     },
+    ExternStruct {
+        annotations: Vec<Annotation>,
+        name: Name,
+        extern_name: Name,
+        members: Vec<Member>,
+        span: Span,
+    },
+    ExternUnion {
+        annotations: Vec<Annotation>,
+        name: Name,
+        extern_name: Name,
+        members: Vec<Member>,
+        span: Span,
+    },
     Fn {
         annotations: Vec<Annotation>,
         signature: Signature,
@@ -878,6 +958,8 @@ impl Stmt {
             | Stmt::ExternFn { span, .. }
             | Stmt::ExternType { span, .. }
             | Stmt::ExternStatic { span, .. }
+            | Stmt::ExternStruct { span, .. }
+            | Stmt::ExternUnion { span, .. }
             | Stmt::Fn { span, .. }
             | Stmt::Const { span, .. }
             | Stmt::Static { span, .. } => *span,
@@ -1033,6 +1115,34 @@ impl TryFrom<UnloadedItem> for Stmt {
                 annotations,
                 name,
                 ty,
+                span,
+            }),
+            UnloadedItem::ExternStruct {
+                annotations,
+                name,
+                extern_name,
+                members,
+                span,
+                ..
+            } => Ok(Stmt::ExternStruct {
+                annotations,
+                name,
+                extern_name,
+                members,
+                span,
+            }),
+            UnloadedItem::ExternUnion {
+                annotations,
+                name,
+                extern_name,
+                members,
+                span,
+                ..
+            } => Ok(Stmt::ExternUnion {
+                annotations,
+                name,
+                extern_name,
+                members,
                 span,
             }),
             UnloadedItem::Trait { .. } | UnloadedItem::Mod { .. } | UnloadedItem::Impl { .. } => {

@@ -31,7 +31,7 @@
 - [x] Change `extern type`
 - [x] Add `union` keyword
 - [x] Parse unions
-- [ ] Parse `extern struct` and `extern union`
+- [x] Parse `extern struct` and `extern union`
 - [x] Parse chained comparisons
 - [x] Parse `in` expressions
 - [ ] Add new type for lhs of Assign/AssignOp
