@@ -27,6 +27,14 @@
 - [x] Add multiline comments
 - [x] Allow arbitrary types in where items
 - [x] Come up with new syntax for functional dependencies
+- [x] Allow multiple types on RHS of functional dependencies
+- [ ] Parse chained comparisons
+- [ ] Parse `in` expressions
+- [ ] Change `extern type`
+- [ ] Add new type for lhs of Assign/AssignOp
+- [ ] Parse `extern struct`
+- [ ] Add `union` keyword
+- [ ] Parse `union` and `extern union`
 - [ ] Nuke name resolution
 - [ ] Implement fixpoint `use` resolution
 - [ ] Figure out how to deal with type aliases

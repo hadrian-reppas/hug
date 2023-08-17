@@ -775,12 +775,16 @@ impl<'a> Parser<'a> {
                 left
             };
 
-            let dash = self.expect(Dash)?;
-            let gt = self.expect(Gt)?;
-            dash.span.by(gt.span, self.tokens.code())?;
-            let right = self.name()?;
+            let (right, last_span) = self.dependency_right()?;
+            let span = first.span.to(last_span);
+            Ok(TraitWhereItem::Dependency { left, right, span })
+        } else if self.peek([Ident, Dash])? {
+            let first = self.name()?;
+            let first_span = first.span;
+            let left = vec![first];
 
-            let span = first.span.to(right.span);
+            let (right, last_span) = self.dependency_right()?;
+            let span = first_span.to(last_span);
             Ok(TraitWhereItem::Dependency { left, right, span })
         } else {
             let ty = self.ty()?;
@@ -794,6 +798,41 @@ impl<'a> Parser<'a> {
 
             let span = ty.span().to(bounds.last().unwrap().span());
             Ok(TraitWhereItem::Bound { ty, bounds, span })
+        }
+    }
+
+    fn dependency_right(&mut self) -> Result<(Vec<Name>, Span), Error> {
+        let dash = self.expect(Dash)?;
+        let gt = self.expect(Gt)?;
+        dash.span.by(gt.span, self.tokens.code())?;
+
+        if self.peek(Ident)? {
+            todo!()
+        } else if self.peek(Lt)? {
+            self.expect(Lt)?;
+            if self.peek(Gt)? {
+                let span = self.expect(Gt)?.span;
+                Ok((Vec::new(), span))
+            } else {
+                let mut names = vec![self.name()?];
+                while !self.peek(Gt)? && !self.peek([Comma, Gt])? {
+                    self.expect(Comma)?;
+                    names.push(self.name()?);
+                }
+                self.consume(Comma)?;
+                let last = self.expect(Gt)?;
+                Ok((names, last.span))
+            }
+        } else {
+            Err(Error::new(
+                format!(
+                    "expected {} or {}, found {}",
+                    Ident.desc(),
+                    Lt.desc(),
+                    self.peek_kind()?.desc()
+                ),
+                Some(self.peek_span()?),
+            ))
         }
     }
 

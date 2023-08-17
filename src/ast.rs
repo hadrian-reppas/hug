@@ -677,7 +677,7 @@ pub enum TraitWhereItem {
     },
     Dependency {
         left: Vec<Name>,
-        right: Name,
+        right: Vec<Name>,
         span: Span,
     },
 }
