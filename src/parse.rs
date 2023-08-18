@@ -997,7 +997,15 @@ impl<'a> Parser<'a> {
             Dash => uop!(Dash, Neg, Prefix),
             Bang => uop!(Bang, Not, Prefix),
             Not => uop!(Not, LogicalNot, Prefix),
-            Star => uop!(Star, Deref, Prefix),
+            Star => {
+                let star = self.expect(Star)?;
+                let expr = self.expr(BindingPower::Prefix, allow_struct)?;
+                let span = star.span.to(expr.span());
+                Expr::Deref {
+                    expr: Box::new(expr),
+                    span,
+                }
+            }
             Amp => {
                 let first = self.expect(Amp)?;
                 let is_mut = self.consume(Mut)?;

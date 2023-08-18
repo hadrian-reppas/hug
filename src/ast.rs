@@ -1197,6 +1197,10 @@ pub enum Expr {
         expr: Box<Expr>,
         span: Span,
     },
+    Deref {
+        expr: Box<Expr>,
+        span: Span,
+    },
     Literal {
         kind: LiteralKind,
         span: Span,
@@ -1355,6 +1359,7 @@ impl Expr {
             | Expr::Binary { span, .. }
             | Expr::Unary { span, .. }
             | Expr::AddrOf { span, .. }
+            | Expr::Deref { span, .. }
             | Expr::Literal { span, .. }
             | Expr::SelfValue { span, .. }
             | Expr::Cast { span, .. }
@@ -1723,7 +1728,6 @@ pub enum BinOp {
 
 #[derive(Debug)]
 pub enum UnOp {
-    Deref,
     Not,
     LogicalNot,
     Neg,

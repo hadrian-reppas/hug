@@ -34,6 +34,8 @@
 - [x] Parse `extern struct` and `extern union`
 - [x] Parse chained comparisons
 - [x] Parse `in` expressions
+- [x] Add `Expr::Deref`
+- [ ] Parse `@label else {}`
 - [ ] Add new type for lhs of Assign/AssignOp
 - [ ] Nuke name resolution
 - [ ] Implement fixpoint `use` resolution
