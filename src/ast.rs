@@ -1262,6 +1262,7 @@ pub enum Expr {
     },
     Label {
         label: Label,
+        or_else: Option<Box<Expr>>,
         span: Span,
     },
     Goto {

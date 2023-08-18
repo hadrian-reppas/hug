@@ -1119,8 +1119,18 @@ impl<'a> Parser<'a> {
             }
             At => {
                 let label = self.label()?;
-                let span = label.span;
-                Expr::Label { label, span }
+                let (or_else, span) = if self.consume(Else)? {
+                    let expr = self.expr(BindingPower::Start, allow_struct)?;
+                    let span = label.span.to(expr.span());
+                    (Some(Box::new(expr)), span)
+                } else {
+                    (None, label.span)
+                };
+                Expr::Label {
+                    label,
+                    or_else,
+                    span,
+                }
             }
 
             Dot => {
