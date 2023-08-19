@@ -38,7 +38,7 @@
 - [x] Parse `@label else {}`
 - [x] Add new type for lhs of Assign/AssignOp
 - [ ] Add `Name` variant in `Expr`
-- [ ] Refactor `SelfKind`
+- [x] Refactor `SelfKind`
 - [ ] Bold error messages
 - [ ] Nuke name resolution
 - [ ] Implement fixpoint `use` resolution

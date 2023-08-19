@@ -2161,20 +2161,20 @@ impl<'a> Parser<'a> {
             let is_mut = self.consume(Mut)?;
             let last = self.expect(SelfValue)?;
             let span = first.span.to(last.span);
-            SelfKind::Ptr { is_mut, span }
+            Some(SelfKind::Ptr { is_mut, span })
         } else if self.peek(SelfValue)? {
             let span = self.expect(SelfValue)?.span;
-            SelfKind::Value {
+            Some(SelfKind::Value {
                 is_mut: false,
                 span,
-            }
+            })
         } else if self.peek([Mut, SelfValue])? {
             let first = self.expect(Mut)?;
             let last = self.expect(SelfValue)?;
             let span = first.span.to(last.span);
-            SelfKind::Value { is_mut: true, span }
+            Some(SelfKind::Value { is_mut: true, span })
         } else {
-            SelfKind::None
+            None
         };
 
         let (params, variadic) = self.params(!self_kind.is_none())?;

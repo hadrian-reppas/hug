@@ -703,7 +703,7 @@ pub struct EnumItem {
 pub struct Signature {
     pub name: Name,
     pub generic_params: Option<GenericParams>,
-    pub self_kind: SelfKind,
+    pub self_kind: Option<SelfKind>,
     pub params: Vec<Param>,
     pub variadic: Option<Variadic>,
     pub ret: Option<Ty>,
@@ -721,19 +721,13 @@ pub struct GenericParams {
 pub enum SelfKind {
     Ptr { is_mut: bool, span: Span },
     Value { is_mut: bool, span: Span },
-    None,
 }
 
 impl SelfKind {
-    pub fn span(&self) -> Option<Span> {
+    pub fn span(&self) -> Span {
         match self {
-            SelfKind::Ptr { span, .. } | SelfKind::Value { span, .. } => Some(*span),
-            SelfKind::None => None,
+            SelfKind::Ptr { span, .. } | SelfKind::Value { span, .. } => *span,
         }
-    }
-
-    pub fn is_none(&self) -> bool {
-        matches!(self, SelfKind::None)
     }
 }
 
