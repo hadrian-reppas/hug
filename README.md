@@ -36,7 +36,10 @@
 - [x] Parse `in` expressions
 - [x] Add `Expr::Deref`
 - [x] Parse `@label else {}`
-- [ ] Add new type for lhs of Assign/AssignOp
+- [x] Add new type for lhs of Assign/AssignOp
+- [ ] Add `Name` variant in `Expr`
+- [ ] Refactor `SelfKind`
+- [ ] Bold error messages
 - [ ] Nuke name resolution
 - [ ] Implement fixpoint `use` resolution
 - [ ] Figure out how to deal with type aliases

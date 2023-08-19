@@ -1246,7 +1246,7 @@ impl<'a> Parser<'a> {
                     let span = lhs.span().to(rhs.span());
                     Expr::AssignOp {
                         op,
-                        target: Box::new(lhs),
+                        target: Box::new(lhs.try_into()?),
                         rhs: Box::new(rhs),
                         op_span,
                         span,
@@ -1256,7 +1256,7 @@ impl<'a> Parser<'a> {
                     let rhs = self.expr(BindingPower::Assign, allow_struct)?;
                     let span = lhs.span().to(rhs.span());
                     Expr::Assign {
-                        target: Box::new(lhs),
+                        target: Box::new(lhs.try_into()?),
                         rhs: Box::new(rhs),
                         span,
                     }

@@ -1276,13 +1276,13 @@ pub enum Expr {
         span: Span,
     },
     Assign {
-        target: Box<Expr>,
+        target: Box<PlaceExpr>,
         rhs: Box<Expr>,
         span: Span,
     },
     AssignOp {
         op: AssignOp,
-        target: Box<Expr>,
+        target: Box<PlaceExpr>,
         rhs: Box<Expr>,
         op_span: Span,
         span: Span,
@@ -1415,6 +1415,62 @@ impl Expr {
 
     pub fn is_cast(&self) -> bool {
         matches!(self, Expr::Cast { .. })
+    }
+}
+
+#[derive(Debug)]
+pub enum PlaceExpr {
+    Deref { expr: Expr, span: Span },
+    Index { expr: Expr, index: Expr, span: Span },
+    Member { expr: Expr, name: Name, span: Span },
+    TupleMember { expr: Expr, index: Span, span: Span },
+    Path { path: GenericPath, span: Span },
+    Paren { expr: Box<PlaceExpr>, span: Span },
+}
+
+impl PlaceExpr {
+    pub fn span(&self) -> Span {
+        match self {
+            PlaceExpr::Deref { span, .. }
+            | PlaceExpr::Index { span, .. }
+            | PlaceExpr::Member { span, .. }
+            | PlaceExpr::TupleMember { span, .. }
+            | PlaceExpr::Path { span, .. }
+            | PlaceExpr::Paren { span, .. } => *span,
+        }
+    }
+}
+
+impl TryFrom<Expr> for PlaceExpr {
+    type Error = Error;
+    fn try_from(expr: Expr) -> Result<PlaceExpr, Self::Error> {
+        match expr {
+            Expr::Deref { expr, span } => Ok(PlaceExpr::Deref { expr: *expr, span }),
+            Expr::Index { expr, index, span } => Ok(PlaceExpr::Index {
+                expr: *expr,
+                index: *index,
+                span,
+            }),
+            Expr::Member { expr, name, span } => Ok(PlaceExpr::Member {
+                expr: *expr,
+                name,
+                span,
+            }),
+            Expr::TupleMember { expr, index, span } => Ok(PlaceExpr::TupleMember {
+                expr: *expr,
+                index,
+                span,
+            }),
+            Expr::Path { path, span } => Ok(PlaceExpr::Path { path, span }),
+            Expr::Paren { expr, span } => Ok(PlaceExpr::Paren {
+                expr: Box::new((*expr).try_into()?),
+                span,
+            }),
+            other => Err(Error::new(
+                "invalid left-hand side of assignment",
+                Some(other.span()),
+            )),
+        }
     }
 }
 
